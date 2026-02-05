@@ -56,6 +56,23 @@ def _ensure_supabase_imports():
             sys.exit(1)
 
 
+
+def _get_supabase_store():
+    """Get SupabaseStore instance from environment credentials.
+    
+    Returns:
+        SupabaseStore instance if credentials are valid, None otherwise.
+    """
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
+        return None
+    
+    return SupabaseStore(supabase_url, supabase_key)
+
+
 def cmd_parse(args) -> int:
     """Parse a file and display its structure."""
     file_path = args.file
@@ -357,16 +374,10 @@ def cmd_ingest(args) -> int:
         print(f"Error: Directory not found: {source_dir}", file=sys.stderr)
         return 1
 
-    # Get Supabase credentials from environment
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-
-    if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
-        return 1
-
     # Initialize store
-    store = SupabaseStore(supabase_url, supabase_key)
+    store = _get_supabase_store()
+    if store is None:
+        return 1
 
     # Find all markdown files in source directory
     source_path = Path(source_dir)
@@ -426,7 +437,7 @@ def cmd_checkout(args) -> int:
 
     # Get Supabase credentials from environment
     supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    supabase_key = os.getenv("SUPABASE_KEY")
 
     if not supabase_url or not supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
@@ -456,7 +467,7 @@ def cmd_checkin(args) -> int:
 
     # Get Supabase credentials from environment
     supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    supabase_key = os.getenv("SUPABASE_KEY")
 
     if not supabase_url or not supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
@@ -478,16 +489,10 @@ def cmd_checkin(args) -> int:
 def cmd_list_library(args) -> int:
     """List files in library."""
     _ensure_supabase_imports()
-    # Get Supabase credentials from environment
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-
-    if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
-        return 1
-
     # Initialize store
-    store = SupabaseStore(supabase_url, supabase_key)
+    store = _get_supabase_store()
+    if store is None:
+        return 1
 
     try:
         files = store.get_all_files()
@@ -525,16 +530,10 @@ def cmd_status(args) -> int:
     _ensure_supabase_imports()
     user = getattr(args, 'user', None)
 
-    # Get Supabase credentials from environment
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-
-    if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
-        return 1
-
     # Initialize store
-    store = SupabaseStore(supabase_url, supabase_key)
+    store = _get_supabase_store()
+    if store is None:
+        return 1
 
     try:
         checkouts = store.get_active_checkouts(user=user)
@@ -570,16 +569,10 @@ def cmd_search_library(args) -> int:
     _ensure_supabase_imports()
     query = args.query
 
-    # Get Supabase credentials from environment
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-
-    if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
-        return 1
-
     # Initialize store
-    store = SupabaseStore(supabase_url, supabase_key)
+    store = _get_supabase_store()
+    if store is None:
+        return 1
 
     try:
         results = store.search_files(query)
