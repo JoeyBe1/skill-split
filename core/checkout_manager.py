@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 from core.supabase_store import SupabaseStore
 from core.recomposer import Recomposer
+from handlers.factory import HandlerFactory
 
 
 class CheckoutManager:
@@ -43,6 +44,14 @@ class CheckoutManager:
 
         # Write file to target
         target.write_text(content)
+
+        # Deploy related files (plugins need .mcp.json, hooks need scripts)
+        handler = HandlerFactory.create_handler(metadata.path)
+        if hasattr(handler, 'get_related_files'):
+            for related_path in handler.get_related_files():
+                related_content = Path(related_path).read_text()
+                related_target = target.parent / Path(related_path).name
+                related_target.write_text(related_content)
 
         # Record checkout in database
         self.store.checkout_file(

@@ -104,3 +104,92 @@ class TestCheckin:
 
         # Verify checkout was marked as returned
         mock_store.checkin_file.assert_called_once_with(checkout_uuid)
+
+
+class TestCheckoutPluginDeployment:
+    """Test checking out plugins deploys all related files."""
+
+    def test_checkout_plugin_deploys_related_files(self, mock_store, tmp_path):
+        """Test that checking out a plugin deploys plugin.json, .mcp.json, and hooks.json."""
+        import json
+        from handlers.plugin_handler import PluginHandler
+
+        # Create temporary plugin directory with all related files
+        plugin_dir = tmp_path / "storage" / "test-plugin"
+        plugin_dir.mkdir(parents=True)
+
+        # Create plugin.json
+        plugin_path = plugin_dir / "plugin.json"
+        plugin_data = {
+            "name": "test-plugin",
+            "version": "1.0.0",
+            "description": "Test plugin",
+            "mcpServers": {"server1": {}},
+            "hooks": ["pre-commit"]
+        }
+        plugin_path.write_text(json.dumps(plugin_data, indent=2))
+
+        # Create .mcp.json
+        mcp_path = plugin_dir / "test-plugin.mcp.json"
+        mcp_data = {
+            "mcpServers": {
+                "server1": {"command": "node", "args": ["server.js"]}
+            }
+        }
+        mcp_path.write_text(json.dumps(mcp_data, indent=2))
+
+        # Create hooks.json
+        hooks_path = plugin_dir / "hooks.json"
+        hooks_data = {
+            "pre-commit": {"description": "Runs before commit"}
+        }
+        hooks_path.write_text(json.dumps(hooks_data, indent=2))
+
+        # Mock store.get_file() to return plugin content
+        plugin_content = plugin_path.read_text()
+        section = Section(
+            level=-1,
+            title="plugin.json",
+            content=plugin_content,
+            line_start=1,
+            line_end=len(plugin_content.splitlines())
+        )
+        metadata = FileMetadata(
+            path=str(plugin_path),
+            type=FileType.PLUGIN,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        # Mock checkout tracking
+        checkout_uuid = str(uuid4())
+        mock_store.checkout_file.return_value = checkout_uuid
+
+        # Create CheckoutManager
+        manager = CheckoutManager(mock_store)
+
+        # Checkout plugin to target directory
+        target_dir = tmp_path / "target" / "plugins" / "test-plugin"
+        deployed_path = manager.checkout_file(
+            file_id="test-plugin-id",
+            user="joey",
+            target_path=str(target_dir / "plugin.json")
+        )
+
+        # Verify all 3 files were deployed
+        assert Path(deployed_path).exists(), "plugin.json not deployed"
+        assert (target_dir / "test-plugin.mcp.json").exists(), ".mcp.json not deployed"
+        assert (target_dir / "hooks.json").exists(), "hooks.json not deployed"
+
+        # Verify plugin.json content
+        deployed_plugin = json.loads(Path(deployed_path).read_text())
+        assert deployed_plugin["name"] == "test-plugin"
+
+        # Verify .mcp.json content
+        deployed_mcp = json.loads((target_dir / "test-plugin.mcp.json").read_text())
+        assert "server1" in deployed_mcp["mcpServers"]
+
+        # Verify hooks.json content
+        deployed_hooks = json.loads((target_dir / "hooks.json").read_text())
+        assert "pre-commit" in deployed_hooks

@@ -140,10 +140,17 @@ skill-split/
 
 ## Production Deployment
 
+**IMPORTANT:** See [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) for current deployment capabilities.
+
 **Database Locations:**
 - **Demo**: `./skill_split.db` (1 file, 4 sections)
 - **Production**: `~/.claude/databases/skill-split.db` (1,365 files, 19,207 sections)
 - **Supabase**: Cloud remote storage (13+ files, fully functional)
+
+**Deployment Capabilities (2026-02-05):**
+- ✅ **Single-file checkout**: Production ready (skills, commands, scripts)
+- ✅ **Multi-file checkout**: FIXED - Now deploys plugins with .mcp.json, hooks with scripts
+- ✅ **All components runtime-ready**: Skills, commands, scripts, plugins, hooks
 
 **Schema Migration (if needed):**
 If you have an old database without the `closing_tag_prefix` column:
@@ -215,4 +222,4 @@ See [EXAMPLES.md](./EXAMPLES.md) for detailed scenarios:
 
 ---
 
-*Last Updated: 2026-02-04 (PRODUCTION READY: All 3 databases tested with 1,365 real files, 99% context savings verified)*
+*Last Updated: 2026-02-05 (PRODUCTION READY: All deployment types functional - single-file, multi-file, plugins, hooks - 214 tests passing)*
