@@ -141,7 +141,10 @@ class TestStoreAndRetrieve:
 
         # Verify sections structure
         assert len(sections) > 0, "should have at least one section"
-        assert sections[0].title == "Test Skill", "first section should be 'Test Skill'"
+        # Blank line after frontmatter is now preserved as orphaned section (level=0)
+        # This is critical for byte-perfect round-trip
+        assert sections[0].level == 0, "first section should be orphaned (blank line)"
+        assert sections[1].title == "Test Skill", "second section should be 'Test Skill'"
 
     def test_store_duplicate_path_updates(self):
         """Storing same path twice should UPDATE not INSERT."""

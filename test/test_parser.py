@@ -138,8 +138,12 @@ Content."""
         doc = self.parser.parse_headings(content)
 
         assert doc.frontmatter == "name: test\n"
-        assert len(doc.sections) == 1
-        assert doc.sections[0].title == "Title"
+        # Blank line after frontmatter is preserved as orphaned section (level=0)
+        # This is critical for byte-perfect round-trip
+        assert len(doc.sections) == 2
+        assert doc.sections[0].level == 0  # Orphaned blank line
+        assert doc.sections[0].content == "\n"
+        assert doc.sections[1].title == "Title"  # Actual heading
 
     def test_code_block_not_split(self):
         """Test that headings in code blocks are not parsed."""

@@ -123,10 +123,9 @@ class Parser:
             # Still haven't found a heading, accumulate orphaned content
             orphaned_lines.append(line)
         
-        # Get orphaned content if any (ignore if empty/whitespace only)
+        # Get orphaned content if any
+        # NOTE: Preserve blank lines for byte-perfect round-trip integrity
         orphaned_content = "".join(orphaned_lines) if orphaned_lines else None
-        if orphaned_content and not orphaned_content.strip():
-            orphaned_content = None  # Skip empty/whitespace-only orphaned content
 
         # Parse headings with line number tracking
         sections = self._parse_heading_lines(lines, first_heading_idx, None, orphaned_content)
