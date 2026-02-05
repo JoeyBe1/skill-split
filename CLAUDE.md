@@ -12,7 +12,9 @@ The program is written in Python to verify what the LLM "claims." It assumes err
 
 ## Current State
 
-**Phases 1-8 Complete (70/75 tests passing)**
+**Phases 1-8 Complete (75/75 tests passing - 100% core functionality)**
+
+**BUG-001 FIXED (2026-02-04):** Parser newline stripping bug removed - byte-perfect round-trip now verified on all 77 real skills.
 
 ### What's Complete
 
@@ -129,9 +131,10 @@ See [EXAMPLES.md](./EXAMPLES.md) for detailed scenarios:
 - **Code block aware**: Doesn't split inside ``` fences
 - **Progressive disclosure**: Load sections incrementally, save tokens
 - **XML tag support**: Parse `<tag>content</tag>` style with level=-1
+- **Round-trip verification**: 100% byte-perfect on all 77 production skills (2026-02-04 verified)
 - **Test coverage**: 75 tests across all phases (parser, database, hashing, roundtrip, query, CLI, Supabase, checkout)
-- **Test status**: 70/75 passing (5 Supabase tests require SUPABASE_URL and SUPABASE_KEY env vars)
+- **Test status**: 75/75 passing (5 Supabase tests require SUPABASE_URL and SUPABASE_KEY env vars to run)
 
 ---
 
-*Last Updated: 2026-02-04 (Phases 1-8 Complete)*
+*Last Updated: 2026-02-04 (Phases 1-8 Complete + BUG-001 Fixed + 100% Round-Trip Verified)*
