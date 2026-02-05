@@ -100,7 +100,7 @@ class HandlerFactory:
         file_type, _ = ComponentDetector.detect(file_path)
 
         # Files with dedicated handlers
-        handler_types = {FileType.PLUGIN, FileType.HOOK, FileType.CONFIG}
+        handler_types = {FileType.PLUGIN, FileType.HOOK, FileType.CONFIG, FileType.SCRIPT}
 
         return file_type in handler_types
 
@@ -126,16 +126,26 @@ class HandlerFactory:
         from handlers.plugin_handler import PluginHandler
         from handlers.hook_handler import HookHandler
         from handlers.config_handler import ConfigHandler
+        from handlers.script_handler import (
+            PythonHandler,
+            JavaScriptHandler,
+            TypeScriptHandler,
+            ShellHandler,
+        )
 
         handler_classes = {
             FileType.PLUGIN: PluginHandler,
             FileType.HOOK: HookHandler,
             FileType.CONFIG: ConfigHandler,
+            FileType.SCRIPT: _get_script_handler_for_path(file_path),
         }
 
         handler_class = handler_classes.get(file_type)
 
         if handler_class:
+            # For script type, handler_class is already an instance
+            if file_type == FileType.SCRIPT:
+                return handler_class
             return handler_class(file_path)
 
         return None
@@ -150,9 +160,9 @@ class HandlerFactory:
 
         Examples:
             >>> HandlerFactory.list_supported_types()
-            ['plugin', 'hook', 'config']
+            ['plugin', 'hook', 'config', 'script']
         """
-        return [ft.value for ft in [FileType.PLUGIN, FileType.HOOK, FileType.CONFIG]]
+        return [ft.value for ft in [FileType.PLUGIN, FileType.HOOK, FileType.CONFIG, FileType.SCRIPT]]
 
     @classmethod
     def list_supported_extensions(cls) -> list[str]:
@@ -164,6 +174,46 @@ class HandlerFactory:
 
         Examples:
             >>> HandlerFactory.list_supported_extensions()
-            ['.json']
+            ['.json', '.py', '.sh', '.js', '.ts', '.jsx', '.tsx']
         """
-        return ['.json']  # All handlers currently support JSON
+        return ['.json', '.py', '.sh', '.js', '.ts', '.jsx', '.tsx']
+
+
+def _get_script_handler_for_path(file_path: str) -> "BaseHandler":
+    """
+    Get the appropriate script handler based on file extension.
+
+    Args:
+        file_path: Path to the script file
+
+    Returns:
+        Script handler instance
+
+    Raises:
+        ValueError: If file extension is not supported
+    """
+    from handlers.script_handler import (
+        PythonHandler,
+        JavaScriptHandler,
+        TypeScriptHandler,
+        ShellHandler,
+    )
+
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+
+    handler_map = {
+        ".py": PythonHandler,
+        ".js": JavaScriptHandler,
+        ".jsx": JavaScriptHandler,
+        ".ts": TypeScriptHandler,
+        ".tsx": TypeScriptHandler,
+        ".sh": ShellHandler,
+    }
+
+    handler_class = handler_map.get(suffix)
+
+    if handler_class is None:
+        raise ValueError(f"Unsupported script file extension: {suffix}")
+
+    return handler_class(file_path)

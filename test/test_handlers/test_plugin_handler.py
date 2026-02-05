@@ -109,29 +109,29 @@ class TestPluginHandler:
 
         assert doc.file_type == FileType.PLUGIN
         assert doc.format == FileFormat.MULTI_FILE
-        assert len(doc.sections) >= 1
-        assert doc.sections[0].title == "metadata"
-        assert "test-plugin" in doc.sections[0].content
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "test-plugin" in doc.frontmatter
 
     def test_plugin_parse_with_mcp(self, plugin_with_mcp):
         """Test plugin parsing with MCP config."""
         handler = PluginHandler(plugin_with_mcp)
         doc = handler.parse()
 
-        assert len(doc.sections) >= 2
-        section_titles = [s.title for s in doc.sections]
-        assert "metadata" in section_titles
-        assert "mcp_config" in section_titles
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "test-plugin" in doc.frontmatter
+        assert "mcpServers" in doc.frontmatter
 
     def test_plugin_parse_with_hooks(self, plugin_with_hooks):
         """Test plugin parsing with hooks config."""
         handler = PluginHandler(plugin_with_hooks)
         doc = handler.parse()
 
-        assert len(doc.sections) >= 2
-        section_titles = [s.title for s in doc.sections]
-        assert "metadata" in section_titles
-        assert "hooks" in section_titles
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "test-plugin" in doc.frontmatter
+        assert "hooks" in doc.frontmatter
 
     def test_plugin_validation_valid(self, plugin_dir):
         """Test validation of valid plugin."""
@@ -182,14 +182,16 @@ class TestPluginHandler:
         assert handler.get_file_format() == FileFormat.MULTI_FILE
 
     def test_plugin_metadata_formatting(self, plugin_dir):
-        """Test metadata is formatted as markdown."""
+        """Test metadata is preserved in frontmatter as JSON."""
         handler = PluginHandler(plugin_dir)
         doc = handler.parse()
 
-        metadata_content = doc.sections[0].content
-        assert "# test-plugin" in metadata_content
-        assert "1.0.0" in metadata_content
-        assert "A test plugin" in metadata_content
+        # Original JSON should be in frontmatter
+        assert doc.frontmatter
+        parsed = json.loads(doc.frontmatter)
+        assert parsed["name"] == "test-plugin"
+        assert parsed["version"] == "1.0.0"
+        assert parsed["description"] == "A test plugin"
 
     def test_plugin_recompute_hash_single_file(self, plugin_dir):
         """Test hash computation for single file."""

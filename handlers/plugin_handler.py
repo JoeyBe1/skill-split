@@ -31,67 +31,25 @@ class PluginHandler(BaseHandler):
 
     def parse(self) -> ParsedDocument:
         """
-        Parse plugin.json and related files into sections.
+        Parse plugin.json - store original content for byte-perfect reconstruction.
+
+        For plugin.json files, we store the original JSON content as-is without
+        creating sections. This ensures byte-perfect round-trip reconstruction.
 
         Returns:
-            ParsedDocument with plugin structure
-
-        Sections created:
-        - metadata: Formatted markdown with plugin info
-        - mcp_config: MCP server config (if .mcp.json exists)
-        - hooks: Hook definitions (if hooks.json exists)
+            ParsedDocument with original JSON content (no sections)
 
         Raises:
             json.JSONDecodeError: If plugin.json is invalid
         """
+        # Validate JSON structure
         plugin_data = json.loads(self.content)
 
-        sections = []
-
-        # Metadata section (always present)
-        sections.append(Section(
-            level=1,
-            title="metadata",
-            content=self._format_metadata(plugin_data),
-            line_start=1,
-            line_end=self.content.count('\n') + 1,
-        ))
-
-        # Check for MCP config
-        mcp_file = self._find_mcp_config()
-        if mcp_file:
-            with open(mcp_file, 'r', encoding='utf-8') as f:
-                mcp_content = f.read()
-                mcp_data = json.loads(mcp_content)
-            sections.append(Section(
-                level=1,
-                title="mcp_config",
-                content=json.dumps(mcp_data, indent=2),
-                line_start=1,
-                line_end=mcp_content.count('\n') + 1,
-            ))
-
-        # Check for hooks
-        hooks_file = self._find_hooks_config()
-        if hooks_file:
-            with open(hooks_file, 'r', encoding='utf-8') as f:
-                hooks_content = f.read()
-                hooks_data = json.loads(hooks_content)
-            sections.append(Section(
-                level=1,
-                title="hooks",
-                content=json.dumps(hooks_data, indent=2),
-                line_start=1,
-                line_end=hooks_content.count('\n') + 1,
-            ))
-
+        # Store original JSON exactly in frontmatter field (no sections)
+        # Recomposer will return frontmatter as-is for FileType.PLUGIN with no sections
         return ParsedDocument(
-            frontmatter=json.dumps({
-                "type": "plugin",
-                "name": plugin_data.get("name", "unknown"),
-                "version": plugin_data.get("version", "unknown")
-            }, indent=2),
-            sections=sections,
+            frontmatter=self.content,  # Store original JSON exactly
+            sections=[],                # No sections - preserve as single unit
             file_type=FileType.PLUGIN,
             format=FileFormat.MULTI_FILE,
             original_path=self.file_path,
@@ -219,39 +177,3 @@ class PluginHandler(BaseHandler):
         plugin_dir = Path(self.file_path).parent
         hooks_file = plugin_dir / "hooks.json"
         return hooks_file if hooks_file.exists() else None
-
-    def _format_metadata(self, plugin_data: dict) -> str:
-        """
-        Format plugin metadata as markdown.
-
-        Args:
-            plugin_data: Parsed plugin.json data
-
-        Returns:
-            Formatted markdown string
-        """
-        lines = [
-            f"# {plugin_data.get('name', 'Unknown Plugin')}",
-            "",
-            f"**Version**: {plugin_data.get('version', 'unknown')}",
-            f"**Description**: {plugin_data.get('description', 'No description')}",
-            "",
-        ]
-
-        if "author" in plugin_data:
-            lines.append(f"**Author**: {plugin_data['author']}")
-            lines.append("")
-
-        if "permissions" in plugin_data:
-            lines.append("## Permissions")
-            for perm in plugin_data["permissions"]:
-                lines.append(f"- {perm}")
-            lines.append("")
-
-        if "mcpServers" in plugin_data:
-            lines.append("## MCP Servers")
-            for server in plugin_data["mcpServers"].keys():
-                lines.append(f"- {server}")
-            lines.append("")
-
-        return "\n".join(lines)

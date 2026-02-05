@@ -87,21 +87,19 @@ class TestConfigHandler:
 
         assert doc.file_type == FileType.CONFIG
         assert doc.format == FileFormat.JSON
-        assert len(doc.sections) == 3  # permissions, enabledPlugins, mcpServers
-
-        section_titles = [s.title for s in doc.sections]
-        assert "permissions" in section_titles
-        assert "enabledPlugins" in section_titles
-        assert "mcpServers" in section_titles
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "permissions" in doc.frontmatter
 
     def test_config_parse_mcp_config(self, mcp_config_file):
         """Test parsing mcp_config.json."""
         handler = ConfigHandler(mcp_config_file)
         doc = handler.parse()
 
-        assert len(doc.sections) == 2  # Two servers
-        assert doc.sections[0].title == "test-server"
-        assert doc.sections[1].title == "remote-server"
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "test-server" in doc.frontmatter
+        assert "remote-server" in doc.frontmatter
 
     def test_config_validation_valid_settings(self, settings_file):
         """Test validation of valid settings.json."""
@@ -170,26 +168,23 @@ class TestConfigHandler:
         assert handler.get_file_format() == FileFormat.JSON
 
     def test_config_format_dict(self, settings_file):
-        """Test that dict values are formatted as JSON."""
+        """Test that original JSON is preserved in frontmatter."""
         handler = ConfigHandler(settings_file)
         doc = handler.parse()
 
-        permissions_section = next(s for s in doc.sections if s.title == "permissions")
-        content = permissions_section.content
-
-        assert "allowNetwork" in content
-        assert "true" in content
+        # Original JSON is in frontmatter
+        assert "permissions" in doc.frontmatter
+        assert "allowNetwork" in doc.frontmatter
 
     def test_config_format_list(self, settings_file):
-        """Test that list values are formatted as bullet lists."""
+        """Test that original JSON is preserved in frontmatter."""
         handler = ConfigHandler(settings_file)
         doc = handler.parse()
 
-        enabled_plugins_section = next(s for s in doc.sections if s.title == "enabledPlugins")
-        content = enabled_plugins_section.content
-
-        assert "- plugin1" in content
-        assert "- plugin2" in content
+        # Original JSON is in frontmatter
+        assert "enabledPlugins" in doc.frontmatter
+        assert "plugin1" in doc.frontmatter
+        assert "plugin2" in doc.frontmatter
 
     def test_config_recompute_hash(self, settings_file):
         """Test hash computation for config files."""
@@ -202,23 +197,26 @@ class TestConfigHandler:
         assert len(hash1) == 64  # SHA256 hex length
 
     def test_config_recompose(self, settings_file):
-        """Test recompose functionality."""
+        """Test that frontmatter contains complete original JSON for recomposition."""
         handler = ConfigHandler(settings_file)
         doc = handler.parse()
 
-        recomposed = handler.recompose(doc.sections)
+        # With no sections, the frontmatter should contain the complete original JSON
+        # The Recomposer class will use this when reconstructing
+        assert doc.frontmatter  # Frontmatter should not be empty
 
-        assert recomposed
-        # The recomposed output should have content from all sections
-        assert "allowNetwork" in recomposed  # From permissions section
-        assert "plugin1" in recomposed  # From enabledPlugins section
-        assert "server1" in recomposed  # From mcpServers section
+        # The frontmatter should be valid JSON with all content
+        assert "permissions" in doc.frontmatter  # All original keys should be present
+        assert "enabledPlugins" in doc.frontmatter
+        assert "mcpServers" in doc.frontmatter
 
     def test_config_frontmatter(self, settings_file):
-        """Test that frontmatter includes file type."""
+        """Test that frontmatter contains original JSON content."""
         handler = ConfigHandler(settings_file)
         doc = handler.parse()
 
-        frontmatter_data = json.loads(doc.frontmatter)
-        assert frontmatter_data["type"] == "config"
-        assert frontmatter_data["file_type"] == "settings.json"
+        # Frontmatter should be valid JSON (the original file content)
+        parsed = json.loads(doc.frontmatter)
+        assert isinstance(parsed, dict)
+        assert "permissions" in parsed
+        assert "enabledPlugins" in parsed

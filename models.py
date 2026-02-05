@@ -24,6 +24,9 @@ class FileFormat(Enum):
     JSON_SCHEMA = "json_schema"  # JSON with known schema
     SHELL_SCRIPT = "shell"    # Shell scripts
     MULTI_FILE = "multi_file"  # Component spanning multiple files
+    # Script file formats (Phase 10+)
+    PYTHON_SCRIPT = "python"  # Python (.py) files
+    JAVASCRIPT_TYPESCRIPT = "javascript_typescript"  # JavaScript/TypeScript files
 
 
 class FileType(Enum):
@@ -39,6 +42,8 @@ class FileType(Enum):
     OUTPUT_STYLE = "output_style"  # /output-styles/*.md
     CONFIG = "config"         # settings.json, mcp_config.json
     DOCUMENTATION = "documentation"  # README.md, CLAUDE.md, reference/*.md
+    # Script files (Phase 10+)
+    SCRIPT = "script"         # Python, Shell, JavaScript, TypeScript files
 
 
 @dataclass

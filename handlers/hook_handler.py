@@ -28,82 +28,25 @@ class HookHandler(BaseHandler):
 
     def parse(self) -> ParsedDocument:
         """
-        Parse hooks.json and associated scripts into sections.
+        Parse hooks.json - store original content for byte-perfect reconstruction.
+
+        For hooks.json files, we store the original JSON content as-is without
+        creating sections. This ensures byte-perfect round-trip reconstruction.
 
         Returns:
-            ParsedDocument with hook structure
-
-        Each hook becomes a section with:
-        - Hook name as title
-        - Hook description and config
-        - Shell script content (if exists)
+            ParsedDocument with original JSON content (no sections)
 
         Raises:
             json.JSONDecodeError: If hooks.json is invalid
         """
+        # Validate JSON structure
         hooks_data = json.loads(self.content)
-        sections = []
 
-        # Handle different hook file formats
-        # Format 1: { "hook_name": { "description": "...", "hooks": {...} } }
-        # Format 2: { "description": "...", "hooks": { "Event": [...] } }
-
-        if "hooks" in hooks_data and isinstance(hooks_data["hooks"], dict):
-            # Format 2: Plugin-style hooks file
-            description = hooks_data.get("description", "Hook configuration")
-            hooks_obj = hooks_data["hooks"]
-
-            # Create overview section
-            sections.append(Section(
-                level=1,
-                title="overview",
-                content=f"# Hook Configuration\n\n**Description**: {description}\n\n**Events**: {', '.join(hooks_obj.keys())}",
-                line_start=1,
-                line_end=self.content.count('\n') + 1,
-            ))
-
-            # Create section for each event
-            for event_name, event_hooks in hooks_obj.items():
-                event_content = json.dumps(event_hooks, indent=2)
-                sections.append(Section(
-                    level=1,
-                    title=event_name,
-                    content=event_content,
-                    line_start=1,
-                    line_end=self.content.count('\n') + 1,
-                ))
-        else:
-            # Format 1: Traditional hooks file - each hook is a top-level key
-            for hook_name, hook_config in hooks_data.items():
-                hook_dir = Path(self.file_path).parent
-
-                # Find script file
-                script_file = hook_dir / f"{hook_name}.sh"
-                script_content = ""
-
-                if script_file.exists():
-                    with open(script_file, 'r', encoding='utf-8') as f:
-                        script_content = f.read()
-
-                # Handle both dict and string hook_config
-                if isinstance(hook_config, str):
-                    hook_config = {"description": hook_config}
-
-                # Create section for this hook
-                sections.append(Section(
-                    level=1,
-                    title=hook_name,
-                    content=self._format_hook(hook_name, hook_config, script_content),
-                    line_start=1,
-                    line_end=script_content.count('\n') + 1 if script_content else 1,
-                ))
-
+        # Store original JSON exactly in frontmatter field (no sections)
+        # Recomposer will return frontmatter as-is for FileType.HOOK with no sections
         return ParsedDocument(
-            frontmatter=json.dumps({
-                "type": "hooks",
-                "count": len(sections)
-            }, indent=2),
-            sections=sections,
+            frontmatter=self.content,  # Store original JSON exactly
+            sections=[],                # No sections - preserve as single unit
             file_type=FileType.HOOK,
             format=FileFormat.MULTI_FILE,
             original_path=self.file_path,
@@ -188,45 +131,3 @@ class HookHandler(BaseHandler):
     def get_file_format(self) -> FileFormat:
         """Return FileFormat.MULTI_FILE for hooks."""
         return FileFormat.MULTI_FILE
-
-    def _format_hook(self, name: str, config: dict, script: str) -> str:
-        """
-        Format hook as markdown with script.
-
-        Args:
-            name: Hook name
-            config: Hook configuration dict
-            script: Shell script content
-
-        Returns:
-            Formatted markdown string
-        """
-        lines = [
-            f"# {name}",
-            "",
-            f"**Description**: {config.get('description', 'No description')}",
-            "",
-        ]
-
-        if "permissions" in config:
-            lines.append("**Permissions**:")
-            for perm in config["permissions"]:
-                lines.append(f"- {perm}")
-            lines.append("")
-
-        if "enabled" in config:
-            status = "enabled" if config["enabled"] else "disabled"
-            lines.append(f"**Status**: {status}")
-            lines.append("")
-
-        if script:
-            lines.append("## Script")
-            lines.append("")
-            lines.append("```bash")
-            lines.append(script)
-            # Handle scripts that don't end with newline
-            if not script.endswith('\n'):
-                lines.append("")
-            lines.append("```")
-
-        return "\n".join(lines)

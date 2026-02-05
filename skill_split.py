@@ -23,6 +23,9 @@ from core.recomposer import Recomposer
 from core.query import QueryAPI
 from models import FileFormat, FileType
 
+# Import HandlerFactory for script and component file handling
+from handlers.factory import HandlerFactory
+
 # Lazy imports for Supabase-dependent modules
 # (to allow running core commands without Supabase installed)
 SupabaseStore = None
@@ -84,13 +87,26 @@ def cmd_parse(args) -> int:
     with open(file_path) as f:
         content = f.read()
 
-    # Detect format and type
-    detector = FormatDetector()
-    file_type, file_format = detector.detect(file_path, content)
+    # Try to use HandlerFactory for script and component files
+    handler = None
+    try:
+        if HandlerFactory.is_supported(file_path):
+            handler = HandlerFactory.create_handler(file_path)
+    except (ValueError, FileNotFoundError):
+        # File not supported or doesn't exist, fall back to parser
+        pass
 
-    # Parse
-    parser = Parser()
-    doc = parser.parse(file_path, content, file_type, file_format)
+    if handler:
+        # Use handler for script/component files
+        doc = handler.parse()
+        file_type = handler.get_file_type()
+        file_format = handler.get_file_format()
+    else:
+        # Fall back to existing Parser for markdown files
+        detector = FormatDetector()
+        file_type, file_format = detector.detect(file_path, content)
+        parser = Parser()
+        doc = parser.parse(file_path, content, file_type, file_format)
 
     # Display results
     print(f"File: {file_path}")
@@ -134,30 +150,46 @@ def cmd_validate(args) -> int:
     with open(file_path) as f:
         content = f.read()
 
-    # Detect format and type
-    detector = FormatDetector()
-    file_type, file_format = detector.detect(file_path, content)
+    # Try to use HandlerFactory for script and component files
+    handler = None
+    try:
+        if HandlerFactory.is_supported(file_path):
+            handler = HandlerFactory.create_handler(file_path)
+    except (ValueError, FileNotFoundError):
+        # File not supported or doesn't exist, fall back to parser
+        pass
 
-    # Parse
-    parser = Parser()
-    doc = parser.parse(file_path, content, file_type, file_format)
+    if handler:
+        # Use handler for script/component files
+        doc = handler.parse()
+        file_type = handler.get_file_type()
+        file_format = handler.get_file_format()
+        result = handler.validate()
+        errors = result.errors
+        warnings = result.warnings
+    else:
+        # Fall back to existing Parser for markdown files
+        detector = FormatDetector()
+        file_type, file_format = detector.detect(file_path, content)
+        parser = Parser()
+        doc = parser.parse(file_path, content, file_type, file_format)
 
-    # Basic validation
-    errors = []
-    warnings = []
+        # Basic validation
+        errors = []
+        warnings = []
 
-    if not doc.sections:
-        errors.append("No sections found in file")
+        if not doc.sections:
+            errors.append("No sections found in file")
 
-    # Check for empty sections
-    def check_empty(sections, path=""):
-        for section in sections:
-            full_path = f"{path}/{section.title}" if path else section.title
-            if not section.content.strip() and not section.children:
-                warnings.append(f"Empty section: {full_path}")
-            check_empty(section.children, full_path)
+        # Check for empty sections
+        def check_empty(sections, path=""):
+            for section in sections:
+                full_path = f"{path}/{section.title}" if path else section.title
+                if not section.content.strip() and not section.children:
+                    warnings.append(f"Empty section: {full_path}")
+                check_empty(section.children, full_path)
 
-    check_empty(doc.sections)
+        check_empty(doc.sections)
 
     # Report
     print(f"Validating: {file_path}")
@@ -198,13 +230,26 @@ def cmd_store(args) -> int:
         print(f"Error: Unable to compute hash for {file_path}", file=sys.stderr)
         return 1
 
-    # Detect format and type
-    detector = FormatDetector()
-    file_type, file_format = detector.detect(file_path, content)
+    # Try to use HandlerFactory for script and component files
+    handler = None
+    try:
+        if HandlerFactory.is_supported(file_path):
+            handler = HandlerFactory.create_handler(file_path)
+    except (ValueError, FileNotFoundError):
+        # File not supported or doesn't exist, fall back to parser
+        pass
 
-    # Parse
-    parser = Parser()
-    doc = parser.parse(file_path, content, file_type, file_format)
+    if handler:
+        # Use handler for script/component files
+        doc = handler.parse()
+        file_type = handler.get_file_type()
+        file_format = handler.get_file_format()
+    else:
+        # Fall back to existing Parser for markdown files
+        detector = FormatDetector()
+        file_type, file_format = detector.detect(file_path, content)
+        parser = Parser()
+        doc = parser.parse(file_path, content, file_type, file_format)
 
     # Store in database
     store = DatabaseStore(db_path)
@@ -299,13 +344,26 @@ def cmd_verify(args) -> int:
         print(f"Error: Unable to compute hash for {file_path}", file=sys.stderr)
         return 1
 
-    # Detect format and type
-    detector = FormatDetector()
-    file_type, file_format = detector.detect(file_path, content)
+    # Try to use HandlerFactory for script and component files
+    handler = None
+    try:
+        if HandlerFactory.is_supported(file_path):
+            handler = HandlerFactory.create_handler(file_path)
+    except (ValueError, FileNotFoundError):
+        # File not supported or doesn't exist, fall back to parser
+        pass
 
-    # Parse
-    parser = Parser()
-    doc = parser.parse(file_path, content, file_type, file_format)
+    if handler:
+        # Use handler for script/component files
+        doc = handler.parse()
+        file_type = handler.get_file_type()
+        file_format = handler.get_file_format()
+    else:
+        # Fall back to existing Parser for markdown files
+        detector = FormatDetector()
+        file_type, file_format = detector.detect(file_path, content)
+        parser = Parser()
+        doc = parser.parse(file_path, content, file_type, file_format)
 
     # Store in database (or update if exists)
     store = DatabaseStore(db_path)
@@ -685,7 +743,7 @@ def _print_sections_with_ids(sections, indent: int, db_path: str) -> None:
     import sqlite3
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT id, title FROM sections WHERE parent_id IS NULL")
+        cursor = conn.execute("SELECT id, title FROM sections")
         id_map = {row["title"]: row["id"] for row in cursor.fetchall()}
 
     for section in sections:

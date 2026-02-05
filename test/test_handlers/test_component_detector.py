@@ -95,8 +95,43 @@ class TestComponentDetector:
         """Test detection of shell script."""
         file_type, file_format = ComponentDetector.detect("my-script.sh")
 
-        assert file_type == FileType.HOOK
+        assert file_type == FileType.SCRIPT
         assert file_format == FileFormat.SHELL_SCRIPT
+
+    def test_detect_python_script(self):
+        """Test detection of Python script."""
+        file_type, file_format = ComponentDetector.detect("my-script.py")
+
+        assert file_type == FileType.SCRIPT
+        assert file_format == FileFormat.PYTHON_SCRIPT
+
+    def test_detect_javascript_script(self):
+        """Test detection of JavaScript script."""
+        file_type, file_format = ComponentDetector.detect("my-script.js")
+
+        assert file_type == FileType.SCRIPT
+        assert file_format == FileFormat.JAVASCRIPT_TYPESCRIPT
+
+    def test_detect_typescript_script(self):
+        """Test detection of TypeScript script."""
+        file_type, file_format = ComponentDetector.detect("my-script.ts")
+
+        assert file_type == FileType.SCRIPT
+        assert file_format == FileFormat.JAVASCRIPT_TYPESCRIPT
+
+    def test_detect_jsx_script(self):
+        """Test detection of JSX script."""
+        file_type, file_format = ComponentDetector.detect("my-component.jsx")
+
+        assert file_type == FileType.SCRIPT
+        assert file_format == FileFormat.JAVASCRIPT_TYPESCRIPT
+
+    def test_detect_tsx_script(self):
+        """Test detection of TSX script."""
+        file_type, file_format = ComponentDetector.detect("my-component.tsx")
+
+        assert file_type == FileType.SCRIPT
+        assert file_format == FileFormat.JAVASCRIPT_TYPESCRIPT
 
     def test_get_handler_for_plugin(self):
         """Test getting handler for plugin.json."""
@@ -155,6 +190,104 @@ class TestComponentDetector:
     def test_is_markdown_file_for_skill(self):
         """Test is_markdown_file for SKILL.md."""
         assert ComponentDetector.is_markdown_file("/skills/test/SKILL.md") is True
+
+    def test_is_markdown_file_for_python_script(self):
+        """Test is_markdown_file for Python script returns False."""
+        assert ComponentDetector.is_markdown_file("my-script.py") is False
+
+    def test_is_markdown_file_for_shell_script(self):
+        """Test is_markdown_file for shell script returns False."""
+        assert ComponentDetector.is_markdown_file("my-script.sh") is False
+
+    def test_get_handler_for_python_script(self):
+        """Test getting handler for Python script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-script.py"
+
+        script_path.write_text('#!/usr/bin/env python3\ndef hello():\n    print("Hello")')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "PythonHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+    def test_get_handler_for_shell_script(self):
+        """Test getting handler for shell script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-script.sh"
+
+        script_path.write_text('#!/bin/bash\necho "Hello"')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "ShellHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+    def test_get_handler_for_javascript_script(self):
+        """Test getting handler for JavaScript script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-script.js"
+
+        script_path.write_text('function hello() {\n    console.log("Hello");\n}')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "JavaScriptHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+    def test_get_handler_for_typescript_script(self):
+        """Test getting handler for TypeScript script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-script.ts"
+
+        script_path.write_text('function hello(): void {\n    console.log("Hello");\n}')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "TypeScriptHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+    def test_get_handler_for_jsx_script(self):
+        """Test getting handler for JSX script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-component.jsx"
+
+        script_path.write_text('export default function MyComponent() {\n    return <div>Hello</div>;\n}')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "JavaScriptHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
+
+    def test_get_handler_for_tsx_script(self):
+        """Test getting handler for TSX script."""
+        temp_dir = tempfile.mkdtemp()
+        script_path = Path(temp_dir) / "my-component.tsx"
+
+        script_path.write_text('export default function MyComponent(): JSX.Element {\n    return <div>Hello</div>;\n}')
+
+        handler = ComponentDetector.get_handler(str(script_path))
+
+        assert handler is not None
+        assert handler.__class__.__name__ == "TypeScriptHandler"
+
+        # Cleanup
+        shutil.rmtree(temp_dir)
 
     def test_detect_with_windows_paths(self):
         """Test detection with Windows-style paths."""

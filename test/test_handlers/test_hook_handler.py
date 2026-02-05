@@ -74,19 +74,21 @@ class TestHookHandler:
 
         assert doc.file_type == FileType.HOOK
         assert doc.format == FileFormat.MULTI_FILE
-        assert len(doc.sections) == 2
-        assert doc.sections[0].title == "pre-commit"
-        assert doc.sections[1].title == "post-commit"
+        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert doc.frontmatter  # Frontmatter contains original JSON
+        assert "pre-commit" in doc.frontmatter
+        assert "post-commit" in doc.frontmatter
 
     def test_hook_parse_with_scripts(self, hooks_dir):
-        """Test that hook scripts are included in sections."""
+        """Test that hook data is preserved in frontmatter."""
         handler = HookHandler(hooks_dir)
         doc = handler.parse()
 
-        for section in doc.sections:
-            # Each section should have script content
-            assert "```bash" in section.content
-            assert section.title in section.content
+        # Original JSON should be in frontmatter
+        assert doc.frontmatter
+        parsed = json.loads(doc.frontmatter)
+        assert "pre-commit" in parsed
+        assert "post-commit" in parsed
 
     def test_hook_validation_valid(self, hooks_dir):
         """Test validation of valid hooks."""
@@ -144,17 +146,15 @@ class TestHookHandler:
         assert handler.get_file_format() == FileFormat.MULTI_FILE
 
     def test_hook_formatting(self, hooks_dir):
-        """Test hook is formatted as markdown with script."""
+        """Test hook data is preserved in frontmatter as JSON."""
         handler = HookHandler(hooks_dir)
         doc = handler.parse()
 
-        pre_commit_section = doc.sections[0]
-        content = pre_commit_section.content
-
-        assert "# pre-commit" in content
-        assert "**Description**:" in content
-        assert "```bash" in content
-        assert "# pre-commit hook" in content
+        # Original JSON should be in frontmatter
+        assert doc.frontmatter
+        parsed = json.loads(doc.frontmatter)
+        assert parsed["pre-commit"]["description"] == "Runs before commit"
+        assert parsed["post-commit"]["description"] == "Runs after commit"
 
     def test_hook_recompute_hash(self, hooks_dir):
         """Test hash computation for hooks."""
@@ -167,12 +167,12 @@ class TestHookHandler:
         assert len(hash1) == 64  # SHA256 hex length
 
     def test_hook_recompose(self, hooks_dir):
-        """Test recompose functionality."""
+        """Test that frontmatter contains complete original JSON for recomposition."""
         handler = HookHandler(hooks_dir)
         doc = handler.parse()
 
-        recomposed = handler.recompose(doc.sections)
-
-        assert recomposed
-        assert "# pre-commit" in recomposed
-        assert "# post-commit" in recomposed
+        # With no sections, the frontmatter should contain the complete original JSON
+        # The Recomposer class will use this when reconstructing
+        assert doc.frontmatter
+        assert "pre-commit" in doc.frontmatter
+        assert "post-commit" in doc.frontmatter

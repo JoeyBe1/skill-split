@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import List, Optional
 
 from core.database import DatabaseStore
-from models import Section
+from models import Section, FileType
+from handlers.factory import HandlerFactory
 
 
 class Recomposer:
@@ -38,6 +39,9 @@ class Recomposer:
         2. A newline separator
         3. All section content in hierarchical order
 
+        For script files (FileType.SCRIPT), uses the handler's recompose()
+        method to ensure proper reconstruction.
+
         Args:
             file_path: Path to the file to reconstruct
 
@@ -50,6 +54,20 @@ class Recomposer:
             return None
 
         metadata, sections = result
+
+        # For script files, use the handler's recompose method
+        if metadata.type == FileType.SCRIPT:
+            try:
+                handler = HandlerFactory.create_handler(file_path)
+                return handler.recompose(sections)
+            except (ValueError, FileNotFoundError):
+                # Fall through to default recomposition
+                pass
+
+        # For hook/plugin/config files with no sections, return frontmatter as-is
+        # These are JSON/YAML configs stored byte-for-byte in frontmatter
+        if metadata.type in (FileType.HOOK, FileType.PLUGIN, FileType.CONFIG) and not sections:
+            return metadata.frontmatter if metadata.frontmatter else ""
 
         # Build frontmatter portion
         frontmatter_part = ""

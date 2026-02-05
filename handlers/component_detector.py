@@ -42,6 +42,7 @@ class ComponentDetector:
         FileType.OUTPUT_STYLE: re.compile(r"/output-styles/[^/]+\.md$"),
         FileType.CONFIG: re.compile(r"(settings\.json|mcp_config\.json)$"),
         FileType.DOCUMENTATION: re.compile(r"(README\.md|CLAUDE\.md|/references/[^/]+\.md$)"),  # Generic references
+        FileType.SCRIPT: re.compile(r"\.(py|sh|js|ts|jsx|tsx)$"),  # Script files
     }
 
     # Handler imports (lazy to avoid circular dependency)
@@ -103,6 +104,13 @@ class ComponentDetector:
         if suffix == ".json":
             return FileFormat.JSON
 
+        # Script file formats
+        if suffix == ".py":
+            return FileFormat.PYTHON_SCRIPT
+
+        if suffix in (".js", ".jsx", ".ts", ".tsx"):
+            return FileFormat.JAVASCRIPT_TYPESCRIPT
+
         if suffix == ".sh":
             return FileFormat.SHELL_SCRIPT
 
@@ -138,6 +146,15 @@ class ComponentDetector:
 
         handler_class = handler_map.get(file_type)
 
+        # Special handling for SCRIPT files - map by extension
+        if file_type == FileType.SCRIPT:
+            path = Path(file_path)
+            script_handlers = handler_map.get(FileType.SCRIPT, {})
+            script_handler = script_handlers.get(path.suffix)
+            if script_handler:
+                return script_handler(file_path)
+            raise ValueError(f"No script handler available for extension: {path.suffix}")
+
         if handler_class is not None:
             return handler_class(file_path)
 
@@ -169,11 +186,23 @@ class ComponentDetector:
             from handlers.plugin_handler import PluginHandler
             from handlers.hook_handler import HookHandler
             from handlers.config_handler import ConfigHandler
+            from handlers.python_handler import PythonHandler
+            from handlers.shell_handler import ShellHandler
+            from handlers.javascript_handler import JavaScriptHandler
+            from handlers.typescript_handler import TypeScriptHandler
 
             cls._handler_classes = {
                 FileType.PLUGIN: PluginHandler,
                 FileType.HOOK: HookHandler,
                 FileType.CONFIG: ConfigHandler,
+                FileType.SCRIPT: {
+                    ".py": PythonHandler,
+                    ".sh": ShellHandler,
+                    ".js": JavaScriptHandler,
+                    ".jsx": JavaScriptHandler,
+                    ".ts": TypeScriptHandler,
+                    ".tsx": TypeScriptHandler,
+                }
             }
 
         return cls._handler_classes
@@ -194,6 +223,8 @@ class ComponentDetector:
             True
             >>> ComponentDetector.is_markdown_file("plugin.json")
             False
+            >>> ComponentDetector.is_markdown_file("script.py")
+            False
         """
         file_type, _ = cls.detect(file_path)
 
@@ -201,5 +232,9 @@ class ComponentDetector:
             FileType.SKILL, FileType.COMMAND, FileType.AGENT,
             FileType.OUTPUT_STYLE, FileType.DOCUMENTATION, FileType.REFERENCE
         }
+
+        # Script files are NOT markdown files
+        if file_type == FileType.SCRIPT:
+            return False
 
         return file_type in markdown_types
