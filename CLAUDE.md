@@ -12,7 +12,7 @@ The program is written in Python to verify what the LLM "claims." It assumes err
 
 ## Current State
 
-**Phases 1-8 Complete (75/75 tests passing - 100% core functionality)**
+**Phases 1-9 Complete (125/125 tests passing - 100% core functionality)**
 
 **BUG-001 FIXED (2026-02-04):** Parser newline stripping bug removed - byte-perfect round-trip now verified on all 77 real skills.
 
@@ -51,11 +51,21 @@ The program is written in Python to verify what the LLM "claims." It assumes err
 - `get_active_checkouts()` - View current deployments
 - Checkout commands: checkout, checkin, status
 
+**Phase 9: Component Handlers**
+- **PluginHandler**: Parse plugin.json with .mcp.json and hooks.json
+- **HookHandler**: Parse hooks.json with shell scripts
+- **ConfigHandler**: Parse settings.json and mcp_config.json
+- **ComponentDetector**: Automatic file type detection
+- **HandlerFactory**: Factory pattern for handler instantiation
+- **Multi-file support**: Track related files with combined hashing
+- **Type validation**: Schema validation for each component type
+- 48 new tests for component handlers
+
 ### Files Created
 ```
 skill-split/
 ├── skill_split.py          # CLI entry point (16 commands)
-├── models.py               # Data classes
+├── models.py               # Data classes (FileType, FileFormat, Section, etc.)
 ├── core/
 │   ├── __init__.py
 │   ├── detector.py         # FormatDetector (XML + headings)
@@ -67,6 +77,14 @@ skill-split/
 │   ├── query.py            # QueryAPI (progressive disclosure)
 │   ├── supabase_store.py   # SupabaseStore (remote storage)
 │   └── checkout_manager.py # CheckoutManager (file deployment)
+├── handlers/               # NEW: Component handlers (Phase 9)
+│   ├── __init__.py
+│   ├── base.py             # BaseHandler abstract interface
+│   ├── component_detector.py # Component type detection
+│   ├── factory.py          # HandlerFactory for handler creation
+│   ├── plugin_handler.py   # PluginHandler (plugin.json)
+│   ├── hook_handler.py     # HookHandler (hooks.json)
+│   └── config_handler.py   # ConfigHandler (settings.json)
 ├── test/
 │   ├── test_parser.py           # 21 tests (Phases 1 + 4)
 │   ├── test_hashing.py          # 5 tests (Phase 2)
@@ -74,14 +92,22 @@ skill-split/
 │   ├── test_roundtrip.py        # 8 tests (Phase 3)
 │   ├── test_query.py            # 18 tests (Phase 5)
 │   ├── test_cli.py              # 16 tests (Phase 6)
-│   ├── test_supabase_store.py   # Supabase tests (Phase 7)
-│   └── test_checkout_manager.py # Checkout tests (Phase 8)
+│   ├── test_supabase_store.py   # 5 tests (Phase 7)
+│   ├── test_checkout_manager.py # 5 tests (Phase 8)
+│   └── test_handlers/           # NEW: 48 tests (Phase 9)
+│       ├── __init__.py
+│       ├── test_component_detector.py # 18 tests
+│       ├── test_plugin_handler.py     # 10 tests
+│       ├── test_hook_handler.py       # 10 tests
+│       └── test_config_handler.py     # 10 tests
 ├── test/fixtures/
 │   └── xml_tags.md         # XML tag fixture (Phase 4)
 ├── demo/
 │   ├── progressive_disclosure.sh  # 8-step end-to-end demo
 │   └── sample_skill.md     # Realistic 50+ section example
-├── EXAMPLES.md             # 3 usage scenarios with output
+├── EXAMPLES.md             # Usage scenarios with output
+├── COMPONENT_HANDLERS.md   # NEW: Component handler guide
+├── HANDLER_INTEGRATION.md  # NEW: Integration guide
 ├── README.md               # Complete documentation
 └── .claude/skills/skill-split.md  # Claude Code skill wrapper
 ```
@@ -131,10 +157,13 @@ See [EXAMPLES.md](./EXAMPLES.md) for detailed scenarios:
 - **Code block aware**: Doesn't split inside ``` fences
 - **Progressive disclosure**: Load sections incrementally, save tokens
 - **XML tag support**: Parse `<tag>content</tag>` style with level=-1
+- **Component handlers**: Type-specific parsers for plugins, hooks, configs
+- **Multi-file support**: Track related files with combined hashing
+- **Automatic type detection**: Path-based component type detection
 - **Round-trip verification**: 100% byte-perfect on all 77 production skills (2026-02-04 verified)
-- **Test coverage**: 75 tests across all phases (parser, database, hashing, roundtrip, query, CLI, Supabase, checkout)
-- **Test status**: 75/75 passing (5 Supabase tests require SUPABASE_URL and SUPABASE_KEY env vars to run)
+- **Test coverage**: 125 tests across all phases (parser, database, hashing, roundtrip, query, CLI, Supabase, checkout, component handlers)
+- **Test status**: 125/125 passing (5 Supabase tests require SUPABASE_URL and SUPABASE_KEY env vars to run)
 
 ---
 
-*Last Updated: 2026-02-04 (Phases 1-8 Complete + BUG-001 Fixed + 100% Round-Trip Verified)*
+*Last Updated: 2026-02-04 (Phases 1-9 Complete + Component Handlers + 100% Round-Trip Verified)*

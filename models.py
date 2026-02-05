@@ -19,6 +19,11 @@ class FileFormat(Enum):
     XML_TAGS = "xml_tags"
     MIXED = "mixed"
     UNKNOWN = "unknown"
+    # NEW formats for component handlers
+    JSON = "json"             # JSON files (config, plugins, hooks)
+    JSON_SCHEMA = "json_schema"  # JSON with known schema
+    SHELL_SCRIPT = "shell"    # Shell scripts
+    MULTI_FILE = "multi_file"  # Component spanning multiple files
 
 
 class FileType(Enum):
@@ -27,6 +32,13 @@ class FileType(Enum):
     SKILL = "skill"  # /skills/*/SKILL.md
     COMMAND = "command"  # /commands/*/*.md
     REFERENCE = "reference"  # /get-shit-done/references/*.md
+    # NEW types for component handlers
+    AGENT = "agent"           # /agents/*/*.md
+    PLUGIN = "plugin"         # plugin.json + .mcp.json + hooks.json
+    HOOK = "hook"             # hooks.json + shell scripts
+    OUTPUT_STYLE = "output_style"  # /output-styles/*.md
+    CONFIG = "config"         # settings.json, mcp_config.json
+    DOCUMENTATION = "documentation"  # README.md, CLAUDE.md, reference/*.md
 
 
 @dataclass
@@ -49,6 +61,7 @@ class Section:
     content: str
     line_start: int
     line_end: int
+    closing_tag_prefix: str = ""  # Whitespace before closing tag (e.g., "  " for "  </tag>")
     children: List[Section] = field(default_factory=list)
     parent: Optional[Section] = field(default=None, repr=False)
 
@@ -186,3 +199,36 @@ class ValidationResult:
     def add_warning(self, message: str) -> None:
         """Add a warning message."""
         self.warnings.append(message)
+
+
+@dataclass
+class ComponentMetadata:
+    """
+    Metadata for non-markdown components.
+
+    For multi-file components (plugins, hooks), tracks
+    related files and their relationships.
+
+    Attributes:
+        component_type: Type of component (FileType)
+        primary_file: Main file path
+        related_files: Associated file paths
+        schema_version: For validation
+        dependencies: Other components this depends on
+    """
+
+    component_type: FileType
+    primary_file: str
+    related_files: List[str] = field(default_factory=list)
+    schema_version: str = "1.0"
+    dependencies: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "component_type": self.component_type.value,
+            "primary_file": self.primary_file,
+            "related_files": self.related_files,
+            "schema_version": self.schema_version,
+            "dependencies": self.dependencies,
+        }

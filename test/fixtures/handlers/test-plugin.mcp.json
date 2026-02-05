@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "test-server": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": {
+        "NODE_ENV": "test"
+      }
+    },
+    "another-server": {
+      "command": "python",
+      "args": ["-m", "server"]
+    }
+  }
+}

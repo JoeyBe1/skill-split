@@ -1,0 +1,20 @@
+{
+  "test-server": {
+    "command": "node",
+    "args": ["server.js"],
+    "env": {
+      "NODE_ENV": "production",
+      "PORT": "3000"
+    }
+  },
+  "remote-server": {
+    "url": "https://api.example.com/mcp",
+    "headers": {
+      "Authorization": "Bearer token123"
+    }
+  },
+  "python-server": {
+    "command": "python",
+    "args": ["-m", "mcp_server"]
+  }
+}

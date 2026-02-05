@@ -1,6 +1,6 @@
 # skill-split
 
-Intelligently split large YAML and Markdown files into sections and store them in SQLite for progressive disclosure. Perfect for Claude Code users working with large skill definitions, documentation, or reference files.
+Intelligently split YAML and Markdown files into sections and store them in SQLite for progressive disclosure. Now with component handler support for plugins, hooks, and configuration files.
 
 ## What It Does
 
@@ -8,6 +8,7 @@ Intelligently split large YAML and Markdown files into sections and store them i
 
 ### Key Features
 
+**Core Capabilities:**
 - **Intelligent Parsing**: Detects and preserves YAML frontmatter, Markdown headings (h1-h6), and XML-style tags
 - **Byte-Perfect Round-Trip**: Recompose files exactly as they were—no corruption, no whitespace changes
 - **Progressive Disclosure**: Load sections incrementally instead of entire files
@@ -15,6 +16,13 @@ Intelligently split large YAML and Markdown files into sections and store them i
 - **Tree Navigation**: Understand full section hierarchy before diving into details
 - **Search-Ready**: Query sections by title, level, or content
 - **Code-Block Aware**: Doesn't split inside markdown code fences
+
+**Phase 9: Component Handlers**
+- **Plugin Support**: Parse `plugin.json` with MCP config and hooks
+- **Hook Support**: Parse `hooks.json` with shell scripts
+- **Config Support**: Parse `settings.json` and `mcp_config.json`
+- **Multi-File Handling**: Track and hash related files together
+- **Type Detection**: Automatic component type detection
 
 ### Why This Matters
 
@@ -494,6 +502,44 @@ CREATE TABLE sections (
 );
 ```
 
+## Component Handler Support (Phase 9)
+
+skill-split now supports specialized Claude Code component types beyond markdown files:
+
+### Supported Components
+
+| Component Type | Files | Handler |
+|----------------|-------|---------|
+| Plugins | `plugin.json`, `*.mcp.json`, `hooks.json` | PluginHandler |
+| Hooks | `hooks.json`, `*.sh` | HookHandler |
+| Config | `settings.json`, `mcp_config.json` | ConfigHandler |
+
+### Usage Examples
+
+```bash
+# Store a plugin component
+./skill_split.py store ~/.claude/plugins/my-plugin/plugin.json
+
+# View plugin structure
+./skill_split.py tree ~/.claude/plugins/my-plugin/plugin.json
+
+# Store hooks configuration
+./skill_split.py store ~/.claude/plugins/my-plugin/hooks.json
+
+# Store configuration files
+./skill_split.py store ~/.claude/settings.json
+./skill_split.py store ~/.claude/mcp_config.json
+```
+
+### Component Features
+
+- **Multi-file support**: Tracks related files (e.g., plugin.json + .mcp.json)
+- **Type validation**: Ensures components follow correct schemas
+- **Progressive disclosure**: Load sections on-demand
+- **Cross-component search**: Search across all component types
+
+For complete documentation, see [COMPONENT_HANDLERS.md](./COMPONENT_HANDLERS.md) and [HANDLER_INTEGRATION.md](./HANDLER_INTEGRATION.md).
+
 ## Testing
 
 ### Run All Tests
@@ -508,10 +554,15 @@ pytest -v
 - **Database Tests** (7 tests): Storage, retrieval, cascade delete
 - **Hashing Tests** (5 tests): Round-trip verification
 - **Round-Trip Tests** (8 tests): Full parse → store → recompose cycle
+- **Query Tests** (18 tests): Progressive disclosure API
+- **CLI Tests** (16 tests): Command-line interface
+- **Supabase Tests** (5 tests): Remote storage integration
+- **Checkout Tests** (5 tests): File deployment workflow
+- **Component Handler Tests** (48 tests): Plugin, Hook, Config handlers
 
 ### Current Test Count
 
-**28 tests passing** (Phases 1-4 complete)
+**125 tests passing** (Phases 1-9 complete, 5 Supabase tests skipped without env vars)
 
 ### Example Test Run
 
@@ -611,6 +662,6 @@ MIT
 
 ---
 
-**Last Updated**: 2026-02-03
-**Status**: Phases 1-4 Complete (28 tests passing)
-**Next**: Phase 5 - Query API Implementation
+**Last Updated**: 2026-02-04
+**Status**: Phases 1-9 Complete (123 tests passing)
+**Next**: Phase 10 - Advanced Component Types (Agents, Output Styles)

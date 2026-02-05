@@ -1,6 +1,6 @@
 # skill-split Usage Examples
 
-This document demonstrates three practical scenarios for using skill-split to manage large skill and command files through progressive disclosure.
+This document demonstrates practical scenarios for using skill-split to manage files through progressive disclosure, including the new component handler support for plugins, hooks, and configuration files.
 
 ---
 
@@ -390,6 +390,218 @@ echo "=== Workflow Complete ==="
 
 ---
 
+## Scenario 4: Component Handler - Plugin Management
+
+**Use Case**: Store and retrieve Claude Code plugins with progressive disclosure.
+
+### Problem
+
+You have a plugin with multiple configuration files:
+- `plugin.json`: Main plugin metadata
+- `my-plugin.mcp.json`: MCP server configuration
+- `hooks.json`: Hook definitions
+
+You want to manage these as a single component while loading sections on-demand.
+
+### Commands
+
+```bash
+# Step 1: Store the plugin
+./skill_split.py store ~/.claude/plugins/my-plugin/plugin.json
+```
+
+**Output:**
+```
+File: /Users/joey/.claude/plugins/my-plugin/plugin.json
+File ID: 3
+Hash: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+Type: plugin
+Format: multi_file
+Sections: 3
+  - metadata
+  - mcp_config
+  - hooks
+```
+
+```bash
+# Step 2: View plugin structure
+./skill_split.py tree ~/.claude/plugins/my-plugin/plugin.json
+```
+
+**Output:**
+```
+File: /Users/joey/.claude/plugins/my-plugin/plugin.json
+
+Sections:
+metadata
+  Lines: 1-10
+mcp_config
+  Lines: 1-25
+hooks
+  Lines: 1-15
+```
+
+```bash
+# Step 3: Get specific section
+./skill_split.py get-section 4 --db skill-split.db
+```
+
+**Output:**
+```
+=== metadata (Level 1, Section ID: 4) ===
+
+# My Plugin
+
+**Version**: 1.0.0
+**Description**: A sample plugin for demonstration
+
+## Permissions
+- allowNetwork
+- allowFileSystemRead
+```
+
+### Benefits
+
+- **Multi-file tracking**: Automatically includes .mcp.json and hooks.json
+- **Combined hashing**: Hash includes all related files for integrity
+- **Type-specific validation**: Checks required fields and schema
+- **Progressive disclosure**: Load only the sections you need
+
+---
+
+## Scenario 5: Component Handler - Configuration Search
+
+**Use Case**: Search across configuration files to find specific settings.
+
+### Problem
+
+You have multiple configuration files and want to find all references to a specific setting or MCP server.
+
+### Commands
+
+```bash
+# Store all configuration files
+./skill_split.py store ~/.claude/settings.json
+./skill_split.py store ~/.claude/mcp_config.json
+
+# Search for specific setting
+./skill_split.py search "mcpServers" --db skill-split.db
+```
+
+**Output:**
+```
+Searching for: mcpServers
+
+Found 2 matches:
+
+File: /Users/joey/.claude/settings.json
+Section: mcpServers (ID: 7)
+Content:
+{
+  "filesystem": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+  }
+}
+
+File: /Users/joey/.claude/mcp_config.json
+Section: mcpServers (ID: 10)
+Content:
+{
+  "github": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"]
+  }
+}
+```
+
+### Benefits
+
+- **Cross-config search**: Find settings across multiple files
+- **Section-level results**: Get specific sections, not entire files
+- **Token efficiency**: Load only matching sections
+- **Unified interface**: Single search for all component types
+
+---
+
+## Scenario 6: Component Handler - Hook Inspection
+
+**Use Case**: Inspect hook definitions and scripts without loading entire plugin.
+
+### Problem
+
+You want to understand what hooks are defined and view specific hook scripts without loading the entire plugin configuration.
+
+### Commands
+
+```bash
+# Step 1: Store hooks configuration
+./skill_split.py store ~/.claude/plugins/my-plugin/hooks.json
+```
+
+**Output:**
+```
+File: /Users/joey/.claude/plugins/my-plugin/hooks.json
+File ID: 4
+Hash: x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4
+Type: hook
+Format: multi_file
+Sections: 3
+  - pre-commit
+  - post-checkout
+  - on-file-change
+```
+
+```bash
+# Step 2: View hook structure
+./skill_split.py tree ~/.claude/plugins/my-plugin/hooks.json
+```
+
+**Output:**
+```
+File: /Users/joey/.claude/plugins/my-plugin/hooks.json
+
+Sections:
+pre-commit
+  Lines: 1-25
+post-checkout
+  Lines: 26-50
+on-file-change
+  Lines: 51-75
+```
+
+```bash
+# Step 3: Get specific hook with script
+./skill_split.py get-section 11 --db skill-split.db
+```
+
+**Output:**
+```
+=== pre-commit (Level 1, Section ID: 11) ===
+
+# pre-commit
+
+**Description**: Runs before creating a git commit
+
+## Script
+
+```bash
+#!/bin/bash
+# Pre-commit hook for linting
+npm run lint
+npm test
+```
+```
+
+### Benefits
+
+- **Script inclusion**: Shell scripts included in sections
+- **Metadata preservation**: Descriptions and permissions preserved
+- **Validation**: Checks for missing scripts and executable permissions
+- **Progressive loading**: View hooks individually
+
+---
+
 ## Key Features Demonstrated
 
 1. **Progressive Disclosure** - Load metadata first, then sections on-demand
@@ -397,9 +609,14 @@ echo "=== Workflow Complete ==="
 3. **Nested Navigation** - Handle both markdown and XML section hierarchies
 4. **Integrity Verification** - SHA256 hashing ensures byte-perfect preservation
 5. **Token Efficiency** - Split large files into manageable pieces
+6. **Component Handlers** - Type-specific parsing for plugins, hooks, configs
+7. **Multi-File Support** - Track related files with combined hashing
+8. **Cross-Component Search** - Search across all component types
 
 ## Next Steps
 
 - See [README.md](./README.md) for installation and setup
 - See [CLAUDE.md](./CLAUDE.md) for project context
+- See [COMPONENT_HANDLERS.md](./COMPONENT_HANDLERS.md) for complete component handler guide
+- See [HANDLER_INTEGRATION.md](./HANDLER_INTEGRATION.md) for integration details
 - Run test suite: `pytest test/ -v`

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allowNetwork": true,
+    "allowFileSystemRead": true,
+    "allowFileSystemWrite": false
+  },
+  "plugins": {
+    "enabled": ["plugin1", "plugin2"],
+    "disabled": []
+  },
+  "mcpServers": {
+    "server1": {
+      "command": "node",
+      "args": ["server.js"]
+    },
+    "server2": {
+      "url": "http://localhost:3000"
+    }
+  },
+  "voiceCommands": {
+    "enabled": true
+  },
+  "context": {
+    "maxTokens": 8000
+  }
+}

@@ -14,14 +14,14 @@ from pathlib import Path
 TEST_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(TEST_DIR.parent))
 
-from tests.roundtrip_lib import test_directory
+from tests.roundtrip_lib import test_directory_files
 
 
 def main():
     commands_dir = Path.home() / ".claude" / "commands"
     
     # Test all .md files in commands/
-    results, summary = test_directory(commands_dir, "*.md", test_db="/tmp/commands-test.db")
+    results, summary = test_directory_files(commands_dir, "*.md", test_db="/tmp/commands-test.db")
     
     # Print summary
     print(f"\n{'='*80}")

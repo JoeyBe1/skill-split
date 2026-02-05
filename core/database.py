@@ -68,6 +68,7 @@ class DatabaseStore:
                     order_index INTEGER NOT NULL,
                     line_start INTEGER NOT NULL,
                     line_end INTEGER NOT NULL,
+                    closing_tag_prefix TEXT DEFAULT '',
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
                     FOREIGN KEY (parent_id) REFERENCES sections(id) ON DELETE CASCADE
                 )
@@ -165,8 +166,8 @@ class DatabaseStore:
                 """
                 INSERT INTO sections (
                     file_id, parent_id, level, title, content,
-                    order_index, line_start, line_end
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    order_index, line_start, line_end, closing_tag_prefix
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     file_id,
@@ -177,6 +178,7 @@ class DatabaseStore:
                     order_index,
                     section.line_start,
                     section.line_end,
+                    section.closing_tag_prefix,
                 ),
             )
             section_id = cursor.lastrowid
@@ -225,7 +227,7 @@ class DatabaseStore:
             cursor = conn.execute(
                 """
                 SELECT id, parent_id, level, title, content,
-                       order_index, line_start, line_end
+                       order_index, line_start, line_end, closing_tag_prefix
                 FROM sections
                 WHERE file_id = ?
                 ORDER BY order_index
@@ -254,7 +256,7 @@ class DatabaseStore:
 
             cursor = conn.execute(
                 """
-                SELECT level, title, content, line_start, line_end
+                SELECT level, title, content, line_start, line_end, closing_tag_prefix
                 FROM sections WHERE id = ?
                 """,
                 (section_id,),
@@ -267,6 +269,7 @@ class DatabaseStore:
             return Section(
                 level=row["level"],
                 title=row["title"],
+                closing_tag_prefix=row["closing_tag_prefix"] if "closing_tag_prefix" in row.keys() else "",
                 content=row["content"],
                 line_start=row["line_start"],
                 line_end=row["line_end"],
@@ -332,12 +335,16 @@ class DatabaseStore:
 
         # First pass: create all Section objects
         for row in rows:
+            # Handle closing_tag_prefix - may not exist in old databases
+            prefix = row["closing_tag_prefix"] if "closing_tag_prefix" in row.keys() else ""
+            
             section = Section(
                 level=row["level"],
                 title=row["title"],
                 content=row["content"],
                 line_start=row["line_start"],
                 line_end=row["line_end"],
+                closing_tag_prefix=prefix,
             )
             sections_by_id[row["id"]] = section
 

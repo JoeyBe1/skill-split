@@ -1,0 +1,17 @@
+{
+  "pre-commit": {
+    "description": "Runs before git commit",
+    "permissions": ["allowFileSystemRead"],
+    "enabled": true
+  },
+  "post-commit": {
+    "description": "Runs after git commit",
+    "permissions": ["allowNetwork"],
+    "enabled": true
+  },
+  "pre-push": {
+    "description": "Runs before git push",
+    "permissions": ["allowFileSystemWrite"],
+    "enabled": false
+  }
+}

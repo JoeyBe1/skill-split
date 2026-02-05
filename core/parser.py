@@ -321,6 +321,7 @@ class Parser:
                 direct_content_lines = []
                 child_tag_indices = []
                 depth = 1  # Track nesting depth (1 = inside current tag)
+                closing_tag_prefix = ""  # Store whitespace before closing tag
 
                 while i < len(lines):
                     next_line = lines[i]
@@ -330,7 +331,11 @@ class Parser:
                     if next_stripped == f"</{tag_name}>":
                         depth -= 1
                         if depth == 0:
-                            # Found our closing tag
+                            # Found our closing tag - capture its prefix (leading whitespace)
+                            # Extract leading whitespace from the original line
+                            prefix_match = re.match(r"^(\s*)", next_line)
+                            if prefix_match:
+                                closing_tag_prefix = prefix_match.group(1)
                             break
 
                     # Check for any opening tag (could be child)
@@ -368,6 +373,7 @@ class Parser:
                     content="".join(content_lines),
                     line_start=section_start,
                     line_end=i + 1,  # i is at closing tag
+                    closing_tag_prefix=closing_tag_prefix,
                 )
 
                 # Recursively parse children from child lines only

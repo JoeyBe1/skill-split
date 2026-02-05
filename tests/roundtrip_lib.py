@@ -127,7 +127,7 @@ def test_round_trip(file_path: str, test_db: str = "/tmp/roundtrip-test.db") -> 
         }
 
 
-def test_directory(directory: Path, pattern: str = "*.md", test_db: str = "/tmp/roundtrip-test.db") -> Tuple[List[Dict], str]:
+def test_directory_files(directory: Path, pattern: str = "*.md", test_db: str = "/tmp/roundtrip-test.db") -> Tuple[List[Dict], str]:
     """
     Test round-trip for all files in a directory matching pattern.
     

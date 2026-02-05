@@ -129,7 +129,7 @@ class Recomposer:
             elif section.level == -1:
                 # XML tag format: <tag> at start, </tag> at end
                 opening_tag = f"<{section.title}>\n"
-                closing_tag = f"</{section.title}>\n"
+                closing_tag = f"{section.closing_tag_prefix}</{section.title}>\n"
 
                 # Add opening tag
                 content_parts.append(opening_tag)

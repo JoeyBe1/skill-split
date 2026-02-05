@@ -1,0 +1,20 @@
+{
+  "name": "test-plugin",
+  "version": "1.0.0",
+  "description": "A test plugin for unit testing",
+  "author": "Test Author",
+  "permissions": [
+    "allowNetwork",
+    "allowFileSystemRead"
+  ],
+  "mcpServers": {
+    "test-server": {
+      "command": "node",
+      "args": ["server.js"]
+    }
+  },
+  "hooks": {
+    "pre-commit": "Runs before commit",
+    "post-commit": "Runs after commit"
+  }
+}
