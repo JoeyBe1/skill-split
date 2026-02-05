@@ -127,9 +127,6 @@ class Parser:
         orphaned_content = "".join(orphaned_lines) if orphaned_lines else None
         if orphaned_content and not orphaned_content.strip():
             orphaned_content = None  # Skip empty/whitespace-only orphaned content
-        elif orphaned_content and orphaned_content.startswith('\n'):
-            # Strip leading newline - frontmatter already adds separator
-            orphaned_content = orphaned_content[1:]
 
         # Parse headings with line number tracking
         sections = self._parse_heading_lines(lines, first_heading_idx, None, orphaned_content)
