@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Start Here
+
+Also read `CODEX.md` (init checklist + guardrails) and `AGENT.md` (agent-wide rules).
+
 ## Project Purpose
 
 `skill-split` is a Python tool for intelligently splitting YAML and Markdown files by sections and subsections. Each section is stored in a SQLite database to enable progressive disclosure of Claude Code components (skills, commands, references).

@@ -8,10 +8,10 @@ from models import ParsedDocument, FileType, FileFormat
 
 
 @pytest.fixture
-def mock_supabase_client(mocker):
+def mock_supabase_client(monkeypatch):
     """Mock Supabase client for testing."""
     mock_client = MagicMock()
-    mocker.patch('core.supabase_store.create_client', return_value=mock_client)
+    monkeypatch.setattr('core.supabase_store.create_client', lambda *args, **kwargs: mock_client)
     return mock_client
 
 
