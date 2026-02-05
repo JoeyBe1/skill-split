@@ -12,7 +12,7 @@ The program is written in Python to verify what the LLM "claims." It assumes err
 
 ## Current State
 
-**Phases 1-6 Complete (75/75 tests passing)**
+**Phases 1-8 Complete (70/75 tests passing)**
 
 ### What's Complete
 
@@ -31,9 +31,23 @@ The program is written in Python to verify what the LLM "claims." It assumes err
 
 **Phase 6: Complete CLI**
 - Core commands: parse, validate, store, get, tree, verify
-- Supabase commands: ingest, checkout, checkin, list-library, search-library, status
 - QueryAPI commands: get-section, next, list, search
 - All 16 commands fully functional with error handling
+
+**Phase 7: Supabase Integration**
+- **SupabaseStore**: Remote storage with Supabase backend
+- `store_file()` - Upload parsed documents to Supabase
+- `get_file()` - Retrieve files with section hierarchy
+- `search_sections()` - Full-text search across library
+- `list_files()` - Browse available files
+- Supabase commands: ingest, list-library, search-library
+
+**Phase 8: Checkout/Checkin Workflow**
+- **CheckoutManager**: File deployment and tracking
+- `checkout()` - Deploy file to local path, track usage
+- `checkin()` - Remove deployed file, update status
+- `get_active_checkouts()` - View current deployments
+- Checkout commands: checkout, checkin, status
 
 ### Files Created
 ```
@@ -48,14 +62,18 @@ skill-split/
 │   ├── hashing.py          # SHA256 file hashing
 │   ├── recomposer.py       # Recomposer (byte-perfect round-trip)
 │   ├── validator.py        # Validator (round-trip verification)
-│   └── query.py            # QueryAPI (progressive disclosure)
+│   ├── query.py            # QueryAPI (progressive disclosure)
+│   ├── supabase_store.py   # SupabaseStore (remote storage)
+│   └── checkout_manager.py # CheckoutManager (file deployment)
 ├── test/
-│   ├── test_parser.py      # 21 tests (Phases 1 + 4)
-│   ├── test_hashing.py     # 5 tests (Phase 2)
-│   ├── test_database.py    # 7 tests (Phase 2)
-│   ├── test_roundtrip.py   # 8 tests (Phase 3)
-│   ├── test_query.py       # 18 tests (Phase 5)
-│   └── test_cli.py         # 16 tests (Phase 6)
+│   ├── test_parser.py           # 21 tests (Phases 1 + 4)
+│   ├── test_hashing.py          # 5 tests (Phase 2)
+│   ├── test_database.py         # 7 tests (Phase 2)
+│   ├── test_roundtrip.py        # 8 tests (Phase 3)
+│   ├── test_query.py            # 18 tests (Phase 5)
+│   ├── test_cli.py              # 16 tests (Phase 6)
+│   ├── test_supabase_store.py   # Supabase tests (Phase 7)
+│   └── test_checkout_manager.py # Checkout tests (Phase 8)
 ├── test/fixtures/
 │   └── xml_tags.md         # XML tag fixture (Phase 4)
 ├── demo/
@@ -111,8 +129,9 @@ See [EXAMPLES.md](./EXAMPLES.md) for detailed scenarios:
 - **Code block aware**: Doesn't split inside ``` fences
 - **Progressive disclosure**: Load sections incrementally, save tokens
 - **XML tag support**: Parse `<tag>content</tag>` style with level=-1
-- **Test coverage**: 75 tests across all phases (parser, database, hashing, roundtrip, query, CLI)
+- **Test coverage**: 75 tests across all phases (parser, database, hashing, roundtrip, query, CLI, Supabase, checkout)
+- **Test status**: 70/75 passing (5 Supabase tests require SUPABASE_URL and SUPABASE_KEY env vars)
 
 ---
 
-*Last Updated: 2026-02-03 (Phases 1-6 Complete)*
+*Last Updated: 2026-02-04 (Phases 1-8 Complete)*

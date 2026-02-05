@@ -52,7 +52,10 @@ pip install click pytest
 python skill_split.py --help
 ```
 
-You should see 6 commands: `parse`, `validate`, `store`, `get`, `tree`, `verify`.
+You should see 16 commands:
+- **Core**: `parse`, `validate`, `store`, `get`, `tree`, `verify`
+- **Query**: `get-section`, `next`, `list`, `search`
+- **Supabase**: `ingest`, `checkout`, `checkin`, `list-library`, `status`, `search-library`
 
 ## Quick Start
 
@@ -284,6 +287,72 @@ Output:
 **Example**:
 ```bash
 ./skill_split.py verify README.md
+```
+
+---
+
+## Supabase Integration
+
+skill-split includes optional Supabase integration for remote storage and sharing of parsed files.
+
+### Setup
+
+Set environment variables:
+```bash
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_PUBLISHABLE_KEY="your-anon-key"
+```
+
+### Ingest Command
+
+Upload local files to Supabase library:
+
+```bash
+./skill_split.py ingest ~/.claude/skills/
+```
+
+Parses all markdown files in directory and uploads to Supabase.
+
+### List Library
+
+View all files in Supabase:
+
+```bash
+./skill_split.py list-library
+```
+
+### Search Library
+
+Search across all files in Supabase:
+
+```bash
+./skill_split.py search-library "authentication"
+```
+
+### Checkout
+
+Deploy a file from Supabase to local path:
+
+```bash
+./skill_split.py checkout <file-id> ~/.claude/skills/temp-skill.md
+```
+
+Tracks deployment in Supabase for management.
+
+### Checkin
+
+Remove deployed file and update status:
+
+```bash
+./skill_split.py checkin ~/.claude/skills/temp-skill.md
+```
+
+### Status
+
+View active checkouts:
+
+```bash
+./skill_split.py status
 ```
 
 ---
