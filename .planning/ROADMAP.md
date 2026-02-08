@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Hybrid Search Scoring** — Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
 - [x] **Phase 2: Search Fix** — Fix CLI search, add query preprocessing, FTS5 sync, child navigation, and documentation ✓ (2026-02-08)
-- [ ] **Phase 3: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup
+- [x] **Phase 3: Batch Embeddings** — Implement batch embedding generation for 10-100x speedup ✓ (2026-02-08)
 - [ ] **Phase 4: Transaction Safety** - Add atomic multi-file checkout operations
 - [ ] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery
 - [ ] **Phase 6: API Key Security** - Remove API keys from environment variables
@@ -81,8 +81,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure
-- [ ] 03-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks
+- [x] 03-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure ✓
+- [x] 03-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks ✓
 
 ### Phase 4: Transaction Safety
 
