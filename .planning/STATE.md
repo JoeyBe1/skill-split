@@ -10,33 +10,33 @@ See: .planning/PROJECT.md (updated 2026-02-08)
 ## Current Position
 
 Phase: 2 of 5 (Search Fix)
-Plan: 1 of 5 completed
-Status: Plan 02-01 verified (work complete from Phase 1)
-Last activity: 2026-02-08 — Verified CLI search uses FTS5 BM25 ranking
+Plan: 2 of 5 completed
+Status: Plan 02-02 complete (query preprocessing documentation)
+Last activity: 2026-02-08 — Added comprehensive search syntax documentation
 
-Progress: [█░░░░░░░░] 10% (1/5 plans complete in Phase 2)
+Progress: [███░░░░░░] 40% (2/5 plans complete in Phase 2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Total plans verified: 2
-- Average duration: 13.5 min
-- Total execution time: 0.45 hours
+- Total plans completed: 3
+- Total plans verified: 3
+- Average duration: 10.3 min
+- Total execution time: 0.51 hours
 
 **By Phase:**
 
 | Phase | Plans | Complete | Status |
 |-------|-------|----------|--------|
 | 1 | 2 | 2 | 100% complete |
-| 2 | 5 | 1 | 20% complete |
+| 2 | 5 | 2 | 40% complete |
 | 3 | 0 | 0 | Not started |
 | 4 | 0 | 0 | Not started |
 | 5 | 0 | 0 | Not started |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (15min), 01-02 (12min), 02-01 (5min verification)
-- Trend: Plan 02-01 already complete from Phase 1
+- Last 5 plans: 01-01 (15min), 01-02 (12min), 02-01 (5min verification), 02-02 (4min documentation)
+- Trend: Documentation-only plan, fast completion
 
 *Updated after each plan completion*
 
@@ -57,6 +57,7 @@ Recent decisions affecting current work:
 - [01-02 Testing]: Comprehensive test suite verifies FTS5 BM25 ranking quality and architectural delegation pattern
 - [01-02 Bug Fix]: Empty query handling added to prevent FTS5 MATCH syntax errors
 - [02-01 Verification]: CLI search verified using FTS5 BM25 ranking, all 518 tests passing
+- [02-02 Documentation]: Search syntax documentation added to README, query preprocessing explained to users
 
 ### Pending Todos
 
@@ -68,11 +69,15 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-08 (Verified Phase 2 Plan 02-01)
-Stopped at: Plan 02-01 verified - CLI search uses FTS5 BM25 ranking
+Last session: 2026-02-08 (Completed Phase 2 Plan 02-02)
+Stopped at: Plan 02-02 complete - Search syntax documentation added
 Resume file: None
 
-**Next action:** Execute Phase 2 Plan 02-02
+**Next action:** Execute Phase 2 Plan 02-03
+
+## Commits from 02-02
+
+- b809fa7: docs(02-02): add comprehensive search syntax documentation
 
 ## Commits from 02-01
 
