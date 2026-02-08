@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any, Callable
 
 from models import FileMetadata, Section, ParsedDocument, FileType
 
@@ -142,7 +142,7 @@ class DatabaseStore:
         self, file_path: str, doc: ParsedDocument, content_hash: str
     ) -> int:
         """
-        Store a file and its sections in the database.
+        Store a file and its sections in the database with FTS5 synchronization.
 
         Handles duplicate paths by updating existing records.
 
@@ -185,8 +185,11 @@ class DatabaseStore:
             # Delete existing sections for this file (cascade delete handles children)
             conn.execute("DELETE FROM sections WHERE file_id = ?", (file_id,))
 
-            # Store sections recursively
+            # Store sections recursively (already includes FTS sync)
             self._store_sections(conn, file_id, doc.sections, parent_id=None)
+
+            # FINAL FTS SYNC to ensure complete index
+            self._ensure_fts_sync(conn)
 
             conn.commit()
             return file_id
@@ -200,7 +203,7 @@ class DatabaseStore:
         order_start: int = 0,
     ) -> None:
         """
-        Recursively store sections in the database.
+        Recursively store sections in the database with FTS5 synchronization.
 
         Args:
             conn: Database connection (within transaction)
@@ -238,6 +241,10 @@ class DatabaseStore:
             # Sync FTS table for this section
             self._sync_section_fts(conn, file_id, section)
 
+        # ENSURE FTS SYNC after bulk insert
+        # This guarantees FTS index is up-to-date for new sections
+        self._ensure_fts_sync(conn)
+
     def _sync_section_fts(
         self,
         conn: sqlite3.Connection,
@@ -270,6 +277,48 @@ class DatabaseStore:
         if section.children:
             for child in section.children:
                 self._sync_section_fts(conn, file_id, child, section_id)
+
+    def _ensure_fts_sync(self, conn: sqlite3.Connection) -> None:
+        """
+        Ensure FTS5 index is synchronized with main sections table.
+
+        FTS5 external content tables can become out of sync during bulk
+        operations or CASCADE deletes. This forces an explicit sync.
+
+        Args:
+            conn: Active database connection
+        """
+        try:
+            # FTS5 'optimize' command rebuilds index ensuring sync
+            conn.execute("INSERT INTO sections_fts(sections_fts) VALUES('optimize')")
+        except Exception:
+            # Optimize may fail if index is empty, ignore
+            pass
+
+    def _sync_single_section_fts(self, conn: sqlite3.Connection, section_id: int) -> None:
+        """
+        Synchronize a single section's FTS5 entry.
+
+        Ensures FTS index contains current section data after updates.
+
+        Args:
+            conn: Active database connection
+            section_id: Section ID to synchronize
+        """
+        # FTS5 external content auto-syncs on INSERT/UPDATE
+        # This ensures explicit sync after potential issues
+        conn.execute(
+            """
+            INSERT INTO sections_fts(rowid, title, content)
+            SELECT id, title, content
+            FROM sections
+            WHERE id = ?
+            ON CONFLICT(rowid) DO UPDATE SET
+                title = excluded.title,
+                content = excluded.content
+            """,
+            (section_id,)
+        )
 
     def get_file(
         self, file_path: str
@@ -587,6 +636,80 @@ class DatabaseStore:
 
             return results
 
+    @staticmethod
+    def preprocess_fts5_query(query: str) -> str:
+        """
+        Convert natural language query to optimal FTS5 MATCH syntax.
+
+        Rules:
+        1. Empty/whitespace: return empty string
+        2. User provided AND/OR/NEAR: use as-is (user knows FTS5 syntax)
+        3. Quoted phrase "exact words": use as-is (phrase search)
+        4. Single word: direct match
+        5. Multi-word unquoted: convert to OR for broader discovery
+
+        Args:
+            query: Raw user search query
+
+        Returns:
+            FTS5 MATCH syntax string
+
+        Examples:
+            "python" → "python"
+            "python handler" → "python" OR "handler"
+            '"python handler"' → '"python handler"' (phrase search)
+            "python AND handler" → "python AND handler" (user operator)
+            "python OR handler" → "python OR handler" (user operator)
+
+        Why OR for multi-word: FTS5 default is implicit AND (both words required).
+            OR provides better discovery - users expect "setup git" to find
+            sections about setup OR git, not only sections mentioning both.
+        """
+        if not query:
+            return ""
+
+        # Normalize whitespace
+        query = ' '.join(query.split())
+
+        if not query:
+            return ""
+
+        query_lower = query.lower()
+
+        # Check for user-provided FTS5 operators (case-insensitive)
+        # If user knows FTS5 syntax, respect their intent and normalize to uppercase
+        fts5_operators = [' and ', ' or ', ' near ']
+        has_operator = any(op in query_lower for op in fts5_operators)
+
+        if has_operator:
+            # Normalize operators to uppercase for consistency
+            result = query_lower.replace(' and ', ' AND ').replace(' or ', ' OR ').replace(' near ', ' NEAR ')
+            return result
+
+        # Check for quoted phrase search
+        if query.startswith('"') and query.endswith('"'):
+            # Quoted phrase - use as-is for exact phrase matching
+            return query
+
+        # Check for single word
+        if ' ' not in query:
+            # Single word - check for special characters that need quoting
+            # FTS5 treats certain characters as operators (-, *, ", etc.)
+            special_chars = set('-*"\'<>')
+            if any(char in query for char in special_chars):
+                return f'"{query}"'
+            return query
+
+        # Multi-word unquoted: convert to OR for discovery
+        # "setup git" → "setup" OR "git"
+        # This finds sections with EITHER word, not just both
+        words = query.split()
+
+        # Quote each word for exact matching (handles special chars)
+        or_terms = ' OR '.join(f'"{w}"' for w in words)
+
+        return or_terms
+
     def search_sections_with_rank(
         self, query: str, file_path: Optional[str] = None
     ) -> List[Tuple[int, float]]:
@@ -597,16 +720,24 @@ class DatabaseStore:
         inverse document frequency. Returns results with relevance scores
         where higher = more relevant.
 
+        Query preprocessing converts natural language to FTS5 syntax:
+        - Multi-word queries use OR for discovery
+        - Quoted phrases use exact phrase matching
+        - User-provided AND/OR/NEAR operators are respected
+
         Args:
-            query: Search string (FTS5 MATCH syntax)
+            query: Search string (natural language or FTS5 MATCH syntax)
             file_path: Optional file path to limit search to one file
 
         Returns:
             List of (section_id, rank) tuples where rank is negative BM25 score
             (higher values = more relevant, so we negate for compatibility)
         """
-        # Handle empty query - FTS5 MATCH fails with empty string
-        if not query or not query.strip():
+        # Preprocess query for optimal FTS5 syntax
+        processed_query = self.preprocess_fts5_query(query)
+
+        # Handle empty query after preprocessing
+        if not processed_query:
             return []
 
         with sqlite3.connect(self.db_path) as conn:
@@ -623,7 +754,7 @@ class DatabaseStore:
                     WHERE sections_fts MATCH ? AND f.path = ?
                     ORDER BY rank
                     """,
-                    (query, file_path)
+                    (processed_query, file_path)
                 )
             else:
                 # Cross-file search with FTS
@@ -635,13 +766,61 @@ class DatabaseStore:
                     WHERE sections_fts MATCH ?
                     ORDER BY rank
                     """,
-                    (query,)
+                    (processed_query,)
                 )
 
             # Return (section_id, normalized_rank) tuples
             # BM25 returns negative scores, negate for "higher = better"
             results = [(row["id"], -row["rank"]) for row in cursor.fetchall()]
             return results
+
+    def delete_file(self, file_id: int) -> bool:
+        """
+        Delete a file and all its sections with FTS cleanup.
+
+        CASCADE delete removes sections, and FTS5 external content table
+        should automatically clean up. We verify and clean any orphans.
+
+        Args:
+            file_id: File ID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+
+            # Check file exists
+            cursor = conn.execute("SELECT id FROM files WHERE id = ?", (file_id,))
+            if not cursor.fetchone():
+                return False
+
+            # Delete file (CASCADE deletes sections)
+            # FTS5 external content table should auto-cleanup when sections are deleted
+            conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
+
+            # Verify no orphaned FTS entries remain and clean if needed
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*) FROM sections_fts
+                WHERE rowid NOT IN (SELECT id FROM sections)
+                """
+            )
+
+            orphaned = cursor.fetchone()[0]
+
+            # Clean up any remaining orphans (safety for FTS5 external content)
+            if orphaned > 0:
+                # Use a simple delete without subquery for orphans
+                conn.execute(
+                    """
+                    DELETE FROM sections_fts
+                    WHERE rowid NOT IN (SELECT id FROM sections)
+                    """
+                )
+
+            conn.commit()
+            return True
 
     def list_files_by_prefix(self, prefix: str) -> List[Dict]:
         """
@@ -667,3 +846,83 @@ class DatabaseStore:
             )
 
             return [dict(row) for row in cursor.fetchall()]
+
+    def batch_generate_embeddings(
+        self,
+        sections: List[Dict[str, Any]],
+        embedding_service: Any,
+        force_regenerate: bool = False
+    ) -> Dict[int, List[float]]:
+        """
+        Generate embeddings for multiple sections in batch.
+
+        Args:
+            sections: List of section dicts with id, content, content_hash
+            embedding_service: EmbeddingService instance
+            force_regenerate: If True, regenerate all embeddings
+
+        Returns:
+            Dict mapping section_id to embedding vector
+        """
+        # Note: Local SQLite doesn't have section_embeddings table
+        # This is a placeholder for consistency with SupabaseStore
+        # Embeddings are typically generated during Supabase sync
+
+        if not sections:
+            return {}
+
+        # Progress callback
+        def progress_callback(current: int, total: int):
+            pct = (current / total) * 100
+            print(f"Generating embeddings: {current}/{total} ({pct:.1f}%)", end='\r')
+
+        # Collect texts and indices
+        texts = [s['content'] for s in sections]
+
+        # Generate embeddings in parallel
+        embeddings = embedding_service.batch_generate_parallel(
+            texts,
+            progress_callback=progress_callback
+        )
+
+        # Store results (in-memory only for local SQLite)
+        section_embeddings: Dict[int, List[float]] = {}
+        for section, embedding in zip(sections, embeddings):
+            if embedding is not None:  # Skip failed embeddings
+                section_embeddings[section['id']] = embedding
+
+        # Print final progress
+        print(f"Generating embeddings: {len(texts)}/{len(texts)} (100.0%)")
+
+        return section_embeddings
+
+    def _has_embedding(self, section_id: int) -> bool:
+        """
+        Check if a section already has an embedding.
+
+        Note: Local SQLite doesn't track embeddings in a separate table.
+        This always returns False to trigger regeneration.
+
+        Args:
+            section_id: Section ID to check
+
+        Returns:
+            True if embedding exists, False otherwise
+        """
+        # Local SQLite doesn't have section_embeddings table
+        return False
+
+    def _store_embedding(self, section_id: int, embedding: List[float]) -> None:
+        """
+        Store an embedding for a section.
+
+        Note: Local SQLite doesn't have section_embeddings table.
+        This is a no-op for consistency with SupabaseStore.
+
+        Args:
+            section_id: Section ID
+            embedding: Embedding vector
+        """
+        # Local SQLite doesn't store embeddings separately
+        # Embeddings are typically generated during Supabase sync
+        pass

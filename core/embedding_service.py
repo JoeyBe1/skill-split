@@ -1,8 +1,10 @@
 """Embedding service for generating and managing text embeddings using OpenAI API."""
 
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import json
+import time
 from datetime import datetime
 
 try:
@@ -11,6 +13,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     OpenAI = None
     openai = None
+
+
+class RateLimitError(Exception):
+    """Raised when OpenAI rate limit is exceeded."""
+    pass
 
 
 class EmbeddingService:
@@ -96,24 +103,34 @@ class EmbeddingService:
         except Exception as e:
             raise RuntimeError(f"Failed to generate embedding: {str(e)}")
 
-    def batch_generate(self, texts: List[str], max_batch_size: int = 100) -> List[List[float]]:
+    def batch_generate(
+        self,
+        texts: List[str],
+        max_batch_size: int = 2048,
+        max_tokens_per_batch: int = 8000
+    ) -> List[List[float]]:
         """
         Generate embeddings in batch for efficiency.
 
-        OpenAI API supports up to 100 texts per request.
-        Larger batches are more efficient in terms of API calls.
+        OpenAI API supports up to 2048 texts per request.
+        Also limited by 8191 tokens per request.
 
         Args:
             texts: List of text strings to embed
-            max_batch_size: Max texts per API call (OpenAI limit: 100)
+            max_batch_size: Max texts per API call (OpenAI limit: 2048)
+            max_tokens_per_batch: Max tokens per batch (OpenAI limit: 8191)
 
         Returns:
             List of embedding vectors, same length as input
 
         Raises:
             ValueError: If texts list is empty or contains empty strings
+            ValueError: If max_batch_size exceeds 2048
             RuntimeError: If OpenAI API call fails
         """
+        # Validate batch size
+        if max_batch_size > 2048:
+            raise ValueError("max_batch_size cannot exceed 2048 (OpenAI API limit)")
         if not texts:
             raise ValueError("Cannot generate embeddings for empty list")
 
@@ -124,10 +141,13 @@ class EmbeddingService:
 
         embeddings = []
 
-        # Process in batches
-        for i in range(0, len(texts), max_batch_size):
-            batch = texts[i:i + max_batch_size]
-            clean_batch = [" ".join(text.split()) for text in batch]
+        # Create batches with token awareness
+        batches = self._create_token_aware_batches(texts, max_batch_size, max_tokens_per_batch)
+
+        # Process each batch
+        for batch_info in batches:
+            batch_texts = batch_info['texts']
+            clean_batch = [" ".join(text.split()) for text in batch_texts]
 
             try:
                 response = self.client.embeddings.create(
@@ -260,6 +280,176 @@ class EmbeddingService:
         """
         char_count = len(text)
         return max(1, int(char_count * self.TOKENS_PER_1K_CHARS))
+
+    def _create_token_aware_batches(
+        self,
+        texts: List[str],
+        max_batch_size: int,
+        max_tokens_per_batch: int = 8000
+    ) -> List[Dict[str, Any]]:
+        """
+        Create batches with token count awareness.
+
+        Ensures that no batch exceeds either the text count limit or the token limit.
+        This is critical for staying within OpenAI's 8191 token per request limit.
+
+        Args:
+            texts: List of text strings to batch
+            max_batch_size: Maximum number of texts per batch
+            max_tokens_per_batch: Maximum tokens per batch (default: 8000, stay under 8191)
+
+        Returns:
+            List of batch dictionaries with 'texts', 'indices', and 'tokens' keys
+        """
+        batches = []
+        current_batch = []
+        current_tokens = 0
+        current_indices = []
+
+        for i, text in enumerate(texts):
+            text_tokens = self.estimate_tokens(text)
+
+            # Check if adding this text would exceed limits
+            if (len(current_batch) >= max_batch_size or
+                current_tokens + text_tokens > max_tokens_per_batch):
+                # Start new batch
+                if current_batch:
+                    batches.append({
+                        'texts': current_batch,
+                        'indices': current_indices,
+                        'tokens': current_tokens
+                    })
+                current_batch = []
+                current_tokens = 0
+                current_indices = []
+
+            current_batch.append(text)
+            current_tokens += text_tokens
+            current_indices.append(i)
+
+        # Add final batch
+        if current_batch:
+            batches.append({
+                'texts': current_batch,
+                'indices': current_indices,
+                'tokens': current_tokens
+            })
+
+        return batches
+
+    def _process_batch(self, batch_info: Dict[str, Any]) -> List[List[float]]:
+        """
+        Process a single batch and return embeddings.
+
+        Args:
+            batch_info: Dictionary with 'texts' and 'tokens' keys
+
+        Returns:
+            List of embedding vectors
+        """
+        return self.batch_generate(batch_info['texts'], max_batch_size=len(batch_info['texts']))
+
+    def batch_generate_parallel(
+        self,
+        texts: List[str],
+        max_batch_size: int = 2048,
+        max_workers: int = 5,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> List[Optional[List[float]]]:
+        """
+        Generate embeddings in parallel batches for maximum speed.
+
+        Processes multiple batches concurrently using ThreadPoolExecutor.
+        Maximizes throughput while respecting OpenAI rate limits.
+
+        Args:
+            texts: List of text strings to embed
+            max_batch_size: Max texts per API call (default: 2048)
+            max_workers: Max concurrent API calls (default: 5)
+            progress_callback: Optional callback(current, total) for progress updates
+
+        Returns:
+            List of embedding vectors, same length as input.
+            Failed embeddings are None (partial success handling).
+        """
+        if not texts:
+            return []
+
+        # Create batches with token awareness
+        batches = self._create_token_aware_batches(texts, max_batch_size)
+
+        embeddings: List[Optional[List[float]]] = [None] * len(texts)
+        completed = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all batch jobs
+            future_to_batch = {
+                executor.submit(self._process_batch, batch): batch
+                for batch in batches
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_batch):
+                batch_info = future_to_batch[future]
+                try:
+                    result = future.result()
+                    # Map results back to original indices
+                    for idx, embedding in zip(batch_info['indices'], result):
+                        embeddings[idx] = embedding
+                    completed += len(batch_info['indices'])
+                    if progress_callback:
+                        progress_callback(completed, len(texts))
+                except Exception as e:
+                    # Store error for this batch, continue with others
+                    print(f"Warning: Batch failed: {str(e)}")
+                    for idx in batch_info['indices']:
+                        embeddings[idx] = None  # Mark as failed
+
+        return embeddings
+
+    def batch_generate_with_retry(
+        self,
+        texts: List[str],
+        max_retries: int = 3,
+        backoff_base: float = 1.0
+    ) -> List[List[float]]:
+        """
+        Generate embeddings with automatic retry on rate limit.
+
+        Implements exponential backoff for rate limit errors.
+
+        Args:
+            texts: List of text strings to embed
+            max_retries: Max retry attempts per batch
+            backoff_base: Base for exponential backoff (seconds)
+
+        Returns:
+            List of embedding vectors, same length as input
+
+        Raises:
+            RuntimeError: If all retries exhausted
+        """
+        embeddings = []
+        batches = self._create_token_aware_batches(texts, 2048)
+
+        for batch in batches:
+            retries = 0
+            while retries < max_retries:
+                try:
+                    result = self._process_batch(batch)
+                    embeddings.extend(result)
+                    break
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if ('rate_limit' in error_str or '429' in error_str) and retries < max_retries - 1:
+                        wait_time = backoff_base * (2 ** retries)
+                        print(f"Rate limited. Waiting {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        retries += 1
+                    else:
+                        raise RuntimeError(f"Failed to generate batch embedding after {retries} retries: {str(e)}")
+
+        return embeddings
 
     def update_metadata(
         self,

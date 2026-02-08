@@ -1,6 +1,11 @@
 """Supabase database store for parsed documents."""
-from typing import List, Optional, Tuple, Dict
-from supabase import create_client, Client
+from typing import List, Optional, Tuple, Dict, Any
+import os
+try:
+    from supabase import create_client, Client
+except ModuleNotFoundError:  # pragma: no cover - handled at runtime
+    create_client = None
+    Client = object
 from models import ParsedDocument, FileMetadata, Section, FileType
 
 
@@ -9,6 +14,8 @@ class SupabaseStore:
 
     def __init__(self, url: str, key: str) -> None:
         """Initialize Supabase client."""
+        if create_client is None:
+            raise ImportError("Supabase client not available. Install 'supabase' package to use Supabase features.")
         self.url = url
         self.key = key
         self.client: Client = create_client(url, key)
@@ -17,7 +24,7 @@ class SupabaseStore:
         self, storage_path: str, name: str, doc: ParsedDocument, content_hash: str
     ) -> str:
         """
-        Store file and sections in Supabase.
+        Store or update file and sections in Supabase.
 
         Args:
             storage_path: Source path where file is stored
@@ -28,21 +35,46 @@ class SupabaseStore:
         Returns:
             file_id (UUID string)
         """
-        # Insert file metadata
-        result = self.client.table("files").insert({
-            "name": name,
-            "storage_path": storage_path,
-            "type": doc.file_type.value,
-            "frontmatter": doc.frontmatter if doc.frontmatter else None,
-            "hash": content_hash
-        }).execute()
+        # Check if file already exists
+        existing = self.client.table("files").select("id").eq("storage_path", storage_path).execute()
 
-        # Get the UUID from the inserted row
-        file_id = result.data[0]["id"]
+        if existing.data:
+            # File exists - update it
+            file_id = existing.data[0]["id"]
+
+            # Delete all existing sections for this file
+            self.client.table("sections").delete().eq("file_id", file_id).execute()
+
+            # Update file metadata
+            self.client.table("files").update({
+                "name": name,
+                "type": doc.file_type.value,
+                "frontmatter": doc.frontmatter if doc.frontmatter else None,
+                "hash": content_hash
+            }).eq("id", file_id).execute()
+        else:
+            # New file - insert it
+            result = self.client.table("files").insert({
+                "name": name,
+                "storage_path": storage_path,
+                "type": doc.file_type.value,
+                "frontmatter": doc.frontmatter if doc.frontmatter else None,
+                "hash": content_hash
+            }).execute()
+
+            file_id = result.data[0]["id"]
 
         # Store sections recursively
         for order_index, section in enumerate(doc.sections):
             self._store_section_recursive(file_id, section, None, order_index)
+
+        # Generate embeddings for sections if enabled
+        if os.getenv('ENABLE_EMBEDDINGS', 'false') == 'true':
+            try:
+                self._generate_section_embeddings(file_id, doc.sections)
+            except Exception as e:
+                # Log but don't fail - embeddings are optional
+                print(f"Warning: Failed to generate embeddings: {str(e)}", file=__import__('sys').stderr)
 
         return file_id
 
@@ -97,9 +129,43 @@ class SupabaseStore:
         if not file_result.data:
             return None
 
-        file_data = file_result.data[0]
+        return self._build_file_from_row(file_result.data[0])
 
-        # Create FileMetadata
+    def get_file_by_path(self, storage_path: str) -> Optional[Tuple[FileMetadata, List[Section]]]:
+        """
+        Retrieve file with sections from Supabase by storage path.
+
+        Args:
+            storage_path: Original storage path
+
+        Returns:
+            Tuple of (FileMetadata, List[Section]) or None if not found
+        """
+        file_result = self.client.table("files").select("*").eq("storage_path", storage_path).execute()
+
+        if not file_result.data:
+            return None
+
+        return self._build_file_from_row(file_result.data[0])
+
+    def list_files_by_prefix(self, prefix: str) -> List[Dict]:
+        """
+        List files whose storage_path starts with the given prefix.
+
+        Args:
+            prefix: Directory-like prefix
+
+        Returns:
+            List of file dictionaries
+        """
+        like_pattern = f"{prefix.rstrip('/')}/%"
+        result = self.client.table("files").select("*").like("storage_path", like_pattern).execute()
+        return result.data
+
+    def _build_file_from_row(self, file_data: Dict) -> Tuple[FileMetadata, List[Section]]:
+        """
+        Build FileMetadata and section tree from a files row.
+        """
         metadata = FileMetadata(
             path=file_data["storage_path"],
             type=FileType(file_data["type"]),
@@ -107,20 +173,18 @@ class SupabaseStore:
             hash=file_data["hash"]
         )
 
-        # Get all sections for this file
-        sections_result = self.client.table("sections").select("*").eq("file_id", file_id).execute()
-
-        # Build section tree
-        sections = self._build_section_tree(sections_result.data)
-
+        sections_result = self.client.table("sections").select("*").eq("file_id", file_data["id"]).execute()
+        sections = self._build_section_tree(sections_result.data, file_data["id"], file_data["type"])
         return (metadata, sections)
 
-    def _build_section_tree(self, sections_data: List[Dict]) -> List[Section]:
+    def _build_section_tree(self, sections_data: List[Dict], file_id: str, file_type: str) -> List[Section]:
         """
         Build hierarchical section tree from flat list.
 
         Args:
             sections_data: Flat list of section dictionaries from database
+            file_id: File ID for metadata
+            file_type: File type for metadata
 
         Returns:
             List of top-level Section objects with children populated
@@ -132,8 +196,11 @@ class SupabaseStore:
                 level=data["level"],
                 title=data["title"],
                 content=data["content"],
-                line_start=data["line_start"],
-                line_end=data["line_end"]
+                line_start=data.get("line_start", 0),
+                line_end=data.get("line_end", 0),
+                closing_tag_prefix=data.get("closing_tag_prefix", ""),
+                file_id=file_id,
+                file_type=FileType(file_type)
             )
             sections_by_id[data["id"]] = section
 
@@ -243,6 +310,146 @@ class SupabaseStore:
         result = self.client.table("files").select("*").ilike("name", f"%{query}%").execute()
         return result.data
 
+    def get_section(self, section_id: str) -> Optional[Tuple[str, Section]]:
+        """
+        Get single section by ID with file_type metadata.
+
+        Args:
+            section_id: UUID of the section
+
+        Returns:
+            Tuple of (section_id, Section) with file_type populated if found, None otherwise
+        """
+        # Use Supabase's foreign key join to get file_type
+        response = self.client.table("sections").select(
+            "id, level, title, content, line_start, line_end, closing_tag_prefix, "
+            "file_id, files!inner(type)"
+        ).eq("id", section_id).execute()
+
+        if not response.data:
+            return None
+
+        row = response.data[0]
+        section = Section(
+            level=row["level"],
+            title=row["title"],
+            content=row["content"],
+            line_start=row.get("line_start", 0),
+            line_end=row.get("line_end", 0),
+            closing_tag_prefix=row.get("closing_tag_prefix", ""),
+            file_id=row["file_id"],
+            file_type=FileType(row["files"]["type"]) if "files" in row and "type" in row["files"] else None,
+        )
+        return (row["id"], section)
+
+    def get_next_section(
+        self, section_id: str, file_id: str
+    ) -> Optional[Tuple[str, Section]]:
+        """
+        Get next section for progressive disclosure.
+
+        Finds the section that follows the given section_id in the file,
+        respecting the hierarchical order.
+
+        Args:
+            section_id: Current section ID (UUID)
+            file_id: File ID (UUID) to search within
+
+        Returns:
+            Tuple of (next_section_id, Section) or None if no next section
+        """
+        # First get current section's order_index and parent_id
+        current_response = self.client.table("sections").select(
+            "parent_id, order_index"
+        ).eq("id", section_id).eq("file_id", file_id).execute()
+
+        if not current_response.data:
+            return None
+
+        current = current_response.data[0]
+        parent_id = current.get("parent_id")
+        order_index = current["order_index"]
+
+        # Find next section by order_index within same file and parent
+        # Handle NULL parent_id case for Supabase query
+        if parent_id is None:
+            # For top-level sections, look for NULL parent_id
+            query = self.client.table("sections").select(
+                "id, level, title, content, line_start, line_end, closing_tag_prefix, "
+                "file_id, files!inner(type)"
+            ).eq("file_id", file_id).is_("parent_id", None).gt("order_index", order_index)
+        else:
+            # For child sections, match parent_id
+            query = self.client.table("sections").select(
+                "id, level, title, content, line_start, line_end, closing_tag_prefix, "
+                "file_id, files!inner(type)"
+            ).eq("file_id", file_id).eq("parent_id", parent_id).gt("order_index", order_index)
+
+        response = query.order("order_index", asc=True).limit(1).execute()
+
+        if not response.data:
+            return None
+
+        row = response.data[0]
+        section = Section(
+            level=row["level"],
+            title=row["title"],
+            content=row["content"],
+            line_start=row.get("line_start", 0),
+            line_end=row.get("line_end", 0),
+            closing_tag_prefix=row.get("closing_tag_prefix", ""),
+            file_id=row["file_id"],
+            file_type=FileType(row["files"]["type"]) if "files" in row and "type" in row["files"] else None,
+        )
+        return (row["id"], section)
+
+    def search_sections(
+        self, query: str, file_id: Optional[str] = None
+    ) -> List[Tuple[str, Section]]:
+        """
+        Search sections by title/content.
+
+        Performs case-insensitive search across section titles and content.
+        If file_id is provided, restricts search to that file.
+
+        Args:
+            query: Search query string
+            file_id: Optional file ID (UUID) to restrict search to
+
+        Returns:
+            List of (section_id, Section) tuples matching the query
+        """
+        # Build query with search in title and content
+        query_builder = self.client.table("sections").select(
+            "id, level, title, content, line_start, line_end, closing_tag_prefix, "
+            "file_id, files!inner(type)"
+        )
+
+        # Add search filter (case-insensitive)
+        query_builder = query_builder.or_(f"title.ilike.%{query}%,content.ilike.%{query}%")
+
+        # Restrict to file if specified
+        if file_id:
+            query_builder = query_builder.eq("file_id", file_id)
+
+        response = query_builder.execute()
+
+        results = []
+        for row in response.data:
+            section = Section(
+                level=row["level"],
+                title=row["title"],
+                content=row["content"],
+                line_start=row.get("line_start", 0),
+                line_end=row.get("line_end", 0),
+                closing_tag_prefix=row.get("closing_tag_prefix", ""),
+                file_id=row["file_id"],
+                file_type=FileType(row["files"]["type"]) if "files" in row and "type" in row["files"] else None,
+            )
+            results.append((row["id"], section))
+
+        return results
+
     def get_all_files(self) -> List[Dict]:
         """
         Get all files in the library.
@@ -252,3 +459,208 @@ class SupabaseStore:
         """
         result = self.client.table("files").select("*").execute()
         return result.data
+
+    def _generate_section_embeddings(self, file_id: str, sections: List[Section]) -> None:
+        """
+        Generate embeddings for all sections in a file using batch processing.
+
+        This is called automatically when ENABLE_EMBEDDINGS=true during file storage.
+        Embeddings are generated using OpenAI's text-embedding-3-small model.
+
+        Args:
+            file_id: UUID of the file being stored
+            sections: List of sections to generate embeddings for
+
+        Raises:
+            Exception: If embedding generation fails (non-fatal, logged as warning)
+        """
+        try:
+            from core.embedding_service import EmbeddingService
+        except ImportError:
+            # Embedding service not available
+            return
+
+        # Get OpenAI API key
+        openai_key = os.getenv('OPENAI_API_KEY')
+        if not openai_key:
+            return
+
+        try:
+            embedding_service = EmbeddingService(openai_key)
+        except Exception:
+            # Embedding service initialization failed
+            return
+
+        # Flatten sections to process all (including children)
+        def flatten_sections(section_list):
+            """Recursively flatten section hierarchy."""
+            flat = []
+            for section in section_list:
+                flat.append(section)
+                if section.children:
+                    flat.extend(flatten_sections(section.children))
+            return flat
+
+        all_sections = flatten_sections(sections)
+
+        # Get section IDs from database
+        result = self.client.table("sections").select("id, content").eq("file_id", file_id).execute()
+
+        if not result.data:
+            return
+
+        # Collect sections that need embeddings
+        sections_to_embed = []
+        for db_section in result.data:
+            section_id = db_section['id']
+            content = db_section['content']
+
+            if not content or not content.strip():
+                continue
+
+            # Check if embedding already exists
+            existing = self.client.table("section_embeddings").select("section_id").eq(
+                "section_id", section_id
+            ).eq("model_name", "text-embedding-3-small").execute()
+
+            if not existing.data:
+                sections_to_embed.append({
+                    'id': section_id,
+                    'content': content
+                })
+
+        if not sections_to_embed:
+            return
+
+        # Progress callback
+        def progress_callback(current: int, total: int):
+            pct = (current / total) * 100
+            print(f"Generating embeddings: {current}/{total} ({pct:.1f}%)", end='\r')
+
+        # Collect texts and section IDs
+        texts = [s['content'] for s in sections_to_embed]
+        section_ids = [s['id'] for s in sections_to_embed]
+
+        try:
+            # Generate embeddings in parallel batches
+            embeddings = embedding_service.batch_generate_parallel(
+                texts,
+                progress_callback=progress_callback
+            )
+
+            # Store results
+            for section_id, embedding in zip(section_ids, embeddings):
+                if embedding is not None:  # Skip failed embeddings
+                    self.client.table("section_embeddings").upsert({
+                        "section_id": section_id,
+                        "embedding": embedding,
+                        "model_name": "text-embedding-3-small"
+                    }, on_conflict="section_id,model_name").execute()
+
+            # Print final progress
+            print(f"Generating embeddings: {len(texts)}/{len(texts)} (100.0%)")
+
+        except Exception as e:
+            # Log error but don't fail - embeddings are optional
+            print(f"Warning: Failed to generate batch embeddings: {str(e)}", file=__import__('sys').stderr)
+
+    def batch_generate_embeddings(
+        self,
+        sections: List[Dict[str, Any]],
+        embedding_service: Any,
+        force_regenerate: bool = False
+    ) -> Dict[str, List[float]]:
+        """
+        Generate embeddings for multiple sections in batch.
+
+        Args:
+            sections: List of section dicts with id, content, content_hash
+            embedding_service: EmbeddingService instance
+            force_regenerate: If True, regenerate all embeddings
+
+        Returns:
+            Dict mapping section_id to embedding vector
+        """
+        # Filter sections that need embeddings
+        sections_to_embed = []
+        for section in sections:
+            section_id = section['id']
+
+            if force_regenerate:
+                sections_to_embed.append(section)
+            else:
+                # Check if embedding already exists
+                existing = self.client.table("section_embeddings").select("section_id").eq(
+                    "section_id", section_id
+                ).eq("model_name", "text-embedding-3-small").execute()
+
+                if not existing.data:
+                    sections_to_embed.append(section)
+
+        if not sections_to_embed:
+            return {}
+
+        # Progress callback
+        def progress_callback(current: int, total: int):
+            pct = (current / total) * 100
+            print(f"Generating embeddings: {current}/{total} ({pct:.1f}%)", end='\r')
+
+        # Collect texts and indices
+        texts = [s['content'] for s in sections_to_embed]
+
+        # Generate embeddings in parallel
+        embeddings = embedding_service.batch_generate_parallel(
+            texts,
+            progress_callback=progress_callback
+        )
+
+        # Store results
+        section_embeddings: Dict[str, List[float]] = {}
+        for section, embedding in zip(sections_to_embed, embeddings):
+            if embedding is not None:  # Skip failed embeddings
+                self.client.table("section_embeddings").upsert({
+                    "section_id": section['id'],
+                    "embedding": embedding,
+                    "model_name": "text-embedding-3-small"
+                }, on_conflict="section_id,model_name").execute()
+                section_embeddings[section['id']] = embedding
+
+        # Print final progress
+        print(f"Generating embeddings: {len(texts)}/{len(texts)} (100.0%)")
+
+        return section_embeddings
+
+    def _has_embedding(self, section_id: str) -> bool:
+        """
+        Check if a section already has an embedding.
+
+        Args:
+            section_id: Section UUID to check
+
+        Returns:
+            True if embedding exists, False otherwise
+        """
+        try:
+            result = self.client.table("section_embeddings").select("section_id").eq(
+                "section_id", section_id
+            ).eq("model_name", "text-embedding-3-small").execute()
+            return len(result.data) > 0
+        except Exception:
+            return False
+
+    def _store_embedding(self, section_id: str, embedding: List[float]) -> None:
+        """
+        Store an embedding for a section.
+
+        Args:
+            section_id: Section UUID
+            embedding: Embedding vector
+        """
+        try:
+            self.client.table("section_embeddings").upsert({
+                "section_id": section_id,
+                "embedding": embedding,
+                "model_name": "text-embedding-3-small"
+            }, on_conflict="section_id,model_name").execute()
+        except Exception as e:
+            print(f"Warning: Failed to store embedding for section {section_id}: {str(e)}", file=__import__('sys').stderr)
