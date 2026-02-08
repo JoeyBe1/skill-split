@@ -34,11 +34,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 3. Hybrid search results include normalized relevance scores combining text and vector similarity
 4. All existing tests pass with new scoring implementation
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Implement FTS5-based text scoring with rank normalization
-- [ ] 01-02: Add text search quality tests for relevance verification
+- [ ] 01-01-PLAN.md — Implement FTS5-based text scoring with rank normalization
+- [ ] 01-02-PLAN.md — Add text search quality tests for relevance verification
 
 ### Phase 2: Batch Embeddings
 
@@ -98,12 +98,11 @@ Plans:
 
 Plans:
 - [ ] 04-01: Create backup module with SQLite dump functionality
-- [ ] 04-02: Implement restore command with integrity verification
-- [ ] 04-03: Add backup/restore integration tests
+- [ ] 04-02: Add restore command with integrity validation
 
 ### Phase 5: API Key Security
 
-**Goal**: API keys are retrieved from secure storage, not environment variables
+**Goal**: API keys retrieved from secure storage, not environment variables
 
 **Depends on**: Nothing (can run in parallel with Phases 1-4)
 
@@ -118,19 +117,20 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 05-01: Design secret manager abstraction with multiple provider support
-- [ ] 05-02: Implement environment variable fallback for local development
-- [ ] 05-03: Add secret retrieval tests and documentation
+- [ ] 05-01: Add secret manager integration (HashiCorp Vault or AWS Secrets Manager)
+- [ ] 05-02: Add fallback to environment variables for local development
+- [ ] 05-03: Update tests to support secret manager mocking
 
-## Progress
+## Requirements Traceability
 
-**Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GS-01 | Phase 1 | Ready to execute |
+| GS-02 | Phase 2 | Planned |
+| GS-03 | Phase 3 | Planned |
+| GS-04 | Phase 4 | Planned |
+| GS-05 | Phase 5 | Planned |
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Hybrid Search Scoring | 0/2 | Not started | - |
-| 2. Batch Embeddings | 0/2 | Not started | - |
-| 3. Transaction Safety | 0/2 | Not started | - |
-| 4. Backup/Restore | 0/3 | Not started | - |
-| 5. API Key Security | 0/3 | Not started | - |
+---
+*Roadmap created: 2026-02-08*
+*Last updated: 2026-02-08*
