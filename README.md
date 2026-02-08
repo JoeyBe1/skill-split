@@ -67,83 +67,40 @@ You should see 16 commands:
 
 ## Quick Start
 
-### 1. Parse a File
-
-Get an overview of all sections in a file without storing it:
+### Parse and Structure
 
 ```bash
-./skill_split.py parse docs/my-skill.md
+# Parse a markdown file
+./skill_split.py parse SKILL.md
+
+# Validate structure
+./skill_split.py validate SKILL.md
+
+# Store in database
+./skill_split.py store SKILL.md
 ```
 
-Output shows section hierarchy:
-```
-File: docs/my-skill.md
-Total sections: 12
-
-Level 1: What it does (bytes 0-450)
-  Level 2: Key Features (bytes 451-1200)
-  Level 2: Why This Matters (bytes 1201-2000)
-Level 1: Installation (bytes 2001-3500)
-  Level 2: Prerequisites (bytes 3501-3800)
-  Level 2: From Source (bytes 3801-5000)
-...
-```
-
-### 2. Store a File in the Database
+### Search and Retrieve
 
 ```bash
-./skill_split.py store docs/my-skill.md
+# Search for content (BM25 keyword search)
+./skill_split.py search "python handler"
+
+# List file sections
+./skill_split.py list SKILL.md
+
+# Get specific section by ID
+./skill_split.py get-section 42
 ```
 
-This creates or updates the SQLite database with all sections. The database tracks:
-- File path and modification time
-- Section title, level, and content
-- Byte positions for exact recomposition
-
-### 3. Retrieve a Single Section
+### Progressive Disclosure
 
 ```bash
-./skill_split.py get docs/my-skill.md "Installation"
-```
+# Navigate to next section (sibling)
+./skill_split.py next 42 SKILL.md
 
-Output:
-```
-=== Installation (Level 1, Section ID: 2) ===
-
-### Prerequisites
-
-- Python 3.8+
-- Click
-...
-```
-
-### 4. View Section Tree
-
-See the full hierarchy without loading content:
-
-```bash
-./skill_split.py tree docs/my-skill.md
-```
-
-Output:
-```
-docs/my-skill.md
-├── What it does (Level 1)
-│   ├── Key Features (Level 2)
-│   └── Why This Matters (Level 2)
-├── Installation (Level 1)
-│   ├── Prerequisites (Level 2)
-│   └── From Source (Level 2)
-└── Testing (Level 1)
-    └── Running Tests (Level 2)
-```
-
-### 5. Validate File Structure
-
-Check if a file can be parsed correctly:
-
-```bash
-./skill_split.py validate docs/my-skill.md
+# Drill into first child subsection
+./skill_split.py next 42 SKILL.md --child
 ```
 
 Returns exit code 0 if valid, non-zero if problems found.
@@ -357,6 +314,82 @@ Output:
 
 ---
 
+## Search & Navigation
+
+skill-split provides THREE search modes for different use cases, plus progressive disclosure navigation for token-efficient content access.
+
+### Three Search Modes
+
+#### 1. BM25 Search (Keywords) - `search` command
+
+**Best for:** Exact keyword matching, fast text search
+
+```bash
+./skill_split.py search "python handler"
+```
+
+**Features:**
+- FTS5 full-text search with BM25 ranking
+- Fast, works locally without API keys
+- Multi-word queries use OR for discovery
+- Relevance scores based on term frequency
+- Boolean operators: AND, OR, NEAR
+
+#### 2. Vector Search (Semantic) - `search-semantic` command
+
+**Best for:** Semantic similarity, concept matching
+
+```bash
+ENABLE_EMBEDDINGS=true ./skill_split.py search-semantic "code execution" --vector-weight 1.0
+```
+
+**Features:**
+- OpenAI embeddings for semantic understanding
+- Finds conceptually similar content
+- Requires `OPENAI_API_KEY` and Supabase
+- Pure vector search (set `--vector-weight 1.0`)
+
+#### 3. Hybrid Search (Combined) - `search-semantic` command
+
+**Best for:** Best of both worlds
+
+```bash
+ENABLE_EMBEDDINGS=true ./skill_split.py search-semantic "python error handling" --vector-weight 0.7
+```
+
+**Features:**
+- Combines BM25 keywords + Vector similarity
+- Default vector weight 0.7 (70% semantic, 30% keyword)
+- Tunable balance between precision and discovery
+- Requires `OPENAI_API_KEY` and Supabase
+
+### Which Search to Use?
+
+| Use Case | Command | Notes |
+|----------|---------|-------|
+| Exact keyword match | `search "python"` | Fast, local, no API needed |
+| Boolean operators | `search "python AND handler"` | AND/OR/NEAR supported |
+| Semantic similarity | `search-semantic "code execution" --vector-weight 1.0` | Requires API keys |
+| Best results | `search-semantic "query" --vector-weight 0.7` | Hybrid search |
+
+**Use BM25 (`search`) when:**
+- You know the exact keywords
+- You want fast local search
+- You don't have API keys configured
+- You need boolean operators (AND/OR/NEAR)
+
+**Use Vector (`search-semantic --vector-weight 1.0`) when:**
+- You want semantic similarity
+- Exact keywords don't matter
+- You're exploring concepts
+- You have API keys configured
+
+**Use Hybrid (`search-semantic --vector-weight 0.7`) when:**
+- You want the best results
+- You need both keyword and semantic matching
+- You're doing comprehensive research
+- You have API keys configured
+
 ## Search Syntax
 
 skill-split uses SQLite FTS5 full-text search with intelligent query processing.
@@ -451,6 +484,59 @@ Search within a specific file:
 - Use AND for narrower results: `term1 AND term2`
 - Multi-word without quotes defaults to OR (better discovery)
 - Relevance scores help identify most relevant results
+
+### Progressive Disclosure
+
+Load large files section-by-section to minimize token usage.
+
+#### List File Structure
+
+Show all sections with their IDs:
+```bash
+./skill_split.py list /skills/programming/SKILL.md
+```
+
+Output:
+```
+ID  Title                             Level
+--- -------------------------------- ------
+1  Overview                         1
+2  Installation                     1
+3  Usage                            1
+4  Advanced Topics                  1
+5    Configuration Options          2
+6    Performance Tuning             2
+7  Troubleshooting                  1
+```
+
+#### Get Single Section
+
+Load just one section by ID:
+```bash
+./skill_split.py get-section 42 --db ~/.claude/databases/skill-split.db
+```
+
+#### Navigate Sequentially
+
+Get next section (sibling):
+```bash
+./skill_split.py next 42 /skills/programming/SKILL.md
+```
+
+Navigate to first child subsection:
+```bash
+./skill_split.py next 42 /skills/programming/SKILL.md --child
+```
+
+#### Typical Workflow
+
+1. List file structure to get section IDs
+2. Load specific section of interest
+3. Use `next` to navigate through content
+4. Use `--child` to drill into subsections
+5. Use `search` to find relevant content across files
+
+**Token Savings:** Instead of loading entire 50-section skill (21KB), load just one section (204 bytes) - **99% context savings**.
 
 ---
 
