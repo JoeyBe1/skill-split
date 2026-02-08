@@ -5,6 +5,7 @@ Covers embedding generation, caching, batch operations, and cost estimation.
 """
 
 import pytest
+import time
 from unittest.mock import Mock, MagicMock, patch
 from core.embedding_service import EmbeddingService
 
@@ -333,3 +334,258 @@ class TestMetadataManagement:
         result = service.get_metadata(mock_supabase)
 
         assert result is None
+
+
+class TestTokenAwareBatching:
+    """Test token-aware batch creation logic."""
+
+    @patch('core.embedding_service.OpenAI')
+    def test_creates_batches_within_size_limit(self, mock_openai):
+        """Verify batches don't exceed max_batch_size."""
+        mock_openai.return_value = MagicMock()
+        service = EmbeddingService(api_key="test")
+        texts = [f"section {i}" for i in range(5000)]
+        batches = service._create_token_aware_batches(texts, max_batch_size=2048)
+
+        for batch in batches:
+            assert len(batch['texts']) <= 2048
+
+    @patch('core.embedding_service.OpenAI')
+    def test_creates_batches_within_token_limit(self, mock_openai):
+        """Verify batches don't exceed 8000 token limit."""
+        mock_openai.return_value = MagicMock()
+        service = EmbeddingService(api_key="test")
+        # Create texts of varying lengths
+        texts = ["x" * 1000 for _ in range(100)]  # Each ~100 tokens
+        batches = service._create_token_aware_batches(texts, max_batch_size=2048)
+
+        for batch in batches:
+            assert batch['tokens'] <= 8000
+
+    @patch('core.embedding_service.OpenAI')
+    def test_handles_empty_list(self, mock_openai):
+        """Verify empty input returns empty batches."""
+        mock_openai.return_value = MagicMock()
+        service = EmbeddingService(api_key="test")
+        batches = service._create_token_aware_batches([], 2048)
+        assert batches == []
+
+    @patch('core.embedding_service.OpenAI')
+    def test_preserves_indices_correctly(self, mock_openai):
+        """Verify batch indices map back to original positions."""
+        mock_openai.return_value = MagicMock()
+        service = EmbeddingService(api_key="test")
+        texts = ["a", "b", "c", "d", "e"]
+        batches = service._create_token_aware_batches(texts, 2048)
+
+        # Reconstruct from indices
+        reconstructed = [None] * len(texts)
+        for batch in batches:
+            for idx, text in zip(batch['indices'], batch['texts']):
+                reconstructed[idx] = text
+
+        assert reconstructed == texts
+
+    @patch('core.embedding_service.OpenAI')
+    def test_handles_mixed_length_texts(self, mock_openai):
+        """Verify batching handles mix of long and short texts correctly."""
+        mock_openai.return_value = MagicMock()
+        service = EmbeddingService(api_key="test")
+        # Create a realistic mix that requires multiple batches
+        # Many medium-length texts that together exceed token limits
+        texts = ["medium length text content here " * 20 for _ in range(1000)]
+        batches = service._create_token_aware_batches(texts, 2048)
+
+        # Should create multiple batches
+        assert len(batches) > 1
+
+        # Verify each batch is within limits
+        for batch in batches:
+            assert len(batch['texts']) <= 2048, "Batch exceeds size limit"
+            assert batch['tokens'] <= 8000, "Batch exceeds token limit"
+
+        # Verify all texts are included
+        total_texts = sum(len(b['texts']) for b in batches)
+        assert total_texts == len(texts)
+
+
+class TestParallelBatchProcessing:
+    """Test parallel batch generation."""
+
+    @pytest.fixture
+    def mock_openai(self, mocker):
+        """Mock OpenAI client for testing."""
+        mock_client = mocker.MagicMock()
+        mock_response = mocker.MagicMock()
+        mock_response.usage.prompt_tokens = 100
+        mock_response.data = [
+            mocker.MagicMock(embedding=[0.1] * 1536)
+            for _ in range(100)
+        ]
+        mock_client.embeddings.create.return_value = mock_response
+        return mock_client
+
+    @patch('core.embedding_service.OpenAI')
+    def test_parallel_processes_multiple_batches(self, mock_openai):
+        """Verify multiple batches processed concurrently."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.usage.prompt_tokens = 100
+        mock_response.data = [
+            MagicMock(embedding=[0.1] * 1536)
+            for _ in range(100)
+        ]
+        mock_client.embeddings.create.return_value = mock_response
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+        service.client = mock_client
+
+        texts = [f"section {i}" for i in range(5000)]
+        embeddings = service.batch_generate_parallel(texts, max_workers=5)
+
+        assert len(embeddings) == 5000
+        # Should have made multiple calls
+        assert mock_client.embeddings.create.call_count > 1
+
+    @patch('core.embedding_service.OpenAI')
+    def test_parallel_preserves_order(self, mock_openai):
+        """Verify embeddings returned in same order as input."""
+        mock_client = MagicMock()
+
+        # Create unique embeddings for each text
+        call_count = 0
+        def create_unique_embeddings(*args, **kwargs):
+            nonlocal call_count
+            texts = kwargs.get('input', [])
+            response = MagicMock()
+            response.data = [
+                MagicMock(embedding=[(call_count + i) / 1000.0] * 1536)
+                for i, _ in enumerate(texts)
+            ]
+            call_count += len(texts)
+            return response
+
+        mock_client.embeddings.create.side_effect = create_unique_embeddings
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+        service.client = mock_client
+
+        texts = ["a", "b", "c", "d", "e"]
+        embeddings = service.batch_generate_parallel(texts, max_workers=2)
+
+        # Check order preserved - each should have unique first value
+        first_values = [emb[0] for emb in embeddings]
+        assert len(first_values) == len(set(first_values))  # All unique
+
+    @patch('core.embedding_service.OpenAI')
+    def test_progress_callback_called(self, mock_openai):
+        """Verify progress callback invoked correctly."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.usage.prompt_tokens = 100
+        mock_response.data = [
+            MagicMock(embedding=[0.1] * 1536)
+            for _ in range(100)
+        ]
+        mock_client.embeddings.create.return_value = mock_response
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+        service.client = mock_client
+
+        progress_updates = []
+        def callback(current, total):
+            progress_updates.append((current, total))
+
+        texts = [f"section {i}" for i in range(100)]
+        embeddings = service.batch_generate_parallel(
+            texts,
+            progress_callback=callback
+        )
+
+        # Should have multiple progress updates
+        assert len(progress_updates) > 0
+        # Final update should show completion
+        assert progress_updates[-1][0] == 100
+
+    @patch('core.embedding_service.OpenAI')
+    def test_handles_batch_failure_gracefully(self, mock_openai):
+        """Verify failed batch doesn't crash entire process."""
+        mock_client = MagicMock()
+
+        # Make second batch fail
+        call_count = 0
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise Exception("Rate limit exceeded")
+            return MagicMock(
+                usage=MagicMock(prompt_tokens=100),
+                data=[MagicMock(embedding=[0.1] * 1536)
+                      for _ in kwargs.get('input', [])]
+            )
+
+        mock_client.embeddings.create.side_effect = side_effect
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+        service.client = mock_client
+
+        texts = [f"section {i}" for i in range(5000)]
+        embeddings = service.batch_generate_parallel(texts, max_workers=3)
+
+        # Should have some embeddings (from successful batches)
+        successful = sum(1 for e in embeddings if e is not None)
+        assert successful > 0
+        assert successful < 5000  # Some failed
+
+
+class TestRateLimitHandling:
+    """Test rate limit retry logic."""
+
+    @patch('core.embedding_service.OpenAI')
+    def test_exponential_backoff(self, mock_openai):
+        """Verify exponential backoff on rate limit."""
+        mock_client = MagicMock()
+
+        # Mock rate limit error then success
+        call_count = 0
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                raise Exception("rate_limit_exceeded")
+            return MagicMock(
+                usage=MagicMock(prompt_tokens=100),
+                data=[MagicMock(embedding=[0.1] * 1536)
+                      for _ in kwargs.get('input', [])]
+            )
+
+        mock_client.embeddings.create.side_effect = side_effect
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+
+        texts = ["test1", "test2"]
+        embeddings = service.batch_generate_with_retry(texts, max_retries=3)
+
+        # Should have succeeded after retries
+        assert len(embeddings) == 2
+        assert call_count == 3  # 2 failures + 1 success
+
+    @patch('core.embedding_service.OpenAI')
+    def test_max_retries_exceeded(self, mock_openai):
+        """Verify failure after max retries."""
+        mock_client = MagicMock()
+        mock_client.embeddings.create.side_effect = Exception("rate_limit_exceeded")
+        mock_openai.return_value = mock_client
+
+        service = EmbeddingService(api_key="test")
+
+        texts = ["test1", "test2"]
+
+        with pytest.raises(RuntimeError, match="Failed to generate batch embedding"):
+            service.batch_generate_with_retry(texts, max_retries=2)
