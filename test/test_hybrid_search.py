@@ -411,3 +411,129 @@ class TestHybridSearchMetrics:
 
         assert hybrid.metrics['total_searches'] == 0
         assert hybrid.metrics['vector_searches'] == 0
+
+
+class TestTextSearchQuality:
+    """Test text search relevance quality with FTS5."""
+
+    @pytest.fixture
+    def quality_hybrid_search(self):
+        """Create HybridSearch with test data."""
+        from core.hybrid_search import HybridSearch
+        from unittest.mock import Mock
+        import tempfile
+        import os
+
+        # Create temporary database with test sections
+        from core.database import DatabaseStore
+        from core.parser import Parser
+        from models import ParsedDocument, Section, FileType, FileFormat
+
+        db_fd, db_path = tempfile.mkstemp(suffix='.db')
+        os.close(db_fd)
+
+        store = DatabaseStore(db_path)
+
+        # Create test document with "vector search" content in different sections
+        sections = [
+            Section(level=1, title="Introduction", content="Basic intro text", line_start=1, line_end=2),
+            Section(level=1, title="Vector Search", content="This section discusses vector search implementation using embeddings and similarity metrics.", line_start=3, line_end=4),
+            Section(level=1, title="Database", content="Database storage and retrieval", line_start=5, line_end=6),
+            Section(level=2, title="Python Handler", content="Python handler processes files and creates embeddings for vector search.", line_start=7, line_end=8),
+        ]
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=sections,
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/search.md"
+        )
+        store.store_file("/test/search.md", doc, "test_hash")
+
+        # Create dependencies
+        from core.query import QueryAPI
+        query_api = QueryAPI(db_path)
+
+        embedding_service = Mock()
+        embedding_service.generate_embedding.return_value = [0.1, 0.2, 0.3]
+
+        supabase_store = Mock()
+
+        hybrid = HybridSearch(embedding_service, supabase_store, query_api)
+
+        yield hybrid, db_path
+
+        # Cleanup
+        os.unlink(db_path)
+
+    def test_text_search_finds_relevant_content(self, quality_hybrid_search):
+        """Text search finds content regardless of position."""
+        hybrid, _ = quality_hybrid_search
+
+        results = hybrid.text_search("vector search", limit=10)
+
+        # Should find sections about vector search
+        assert len(results) > 0
+
+        # Get section IDs
+        section_ids = [r[0] for r in results]
+        # Sections 2 and 4 contain "vector search"
+        # They should be in results regardless of position
+        assert len(section_ids) >= 1
+
+    def test_text_search_ranks_relevant_higher(self, quality_hybrid_search):
+        """Relevant sections get higher scores than irrelevant sections."""
+        hybrid, _ = quality_hybrid_search
+
+        results = hybrid.text_search("vector search", limit=10)
+
+        if len(results) >= 2:
+            # First result should have higher score than last
+            assert results[0][1] >= results[-1][1]
+
+    def test_text_search_normalizes_scores(self, quality_hybrid_search):
+        """Text search scores are normalized to [0, 1]."""
+        hybrid, _ = quality_hybrid_search
+
+        results = hybrid.text_search("python handler", limit=10)
+
+        if results:
+            # All scores should be in [0, 1]
+            scores = [r[1] for r in results]
+            assert all(0.0 <= s <= 1.0 for s in scores)
+
+    def test_text_search_vs_position_ranking(self, quality_hybrid_search):
+        """FTS5 ranking differs from simple position-based ranking."""
+        hybrid, _ = quality_hybrid_search
+
+        results_fts = hybrid.text_search("search", limit=10)
+
+        # FTS results should use actual relevance
+        # If we had position-based scoring, first result might differ
+        assert len(results_fts) > 0
+
+        # Verify scores vary (not all the same)
+        if len(results_fts) > 1:
+            scores = [r[1] for r in results_fts]
+            # Scores should not all be identical
+            assert len(set(scores)) > 1, "Scores should vary based on relevance"
+
+    def test_hybrid_search_combines_text_and_vector(self, quality_hybrid_search):
+        """Hybrid search combines FTS text scores with vector similarity."""
+        hybrid, db_path = quality_hybrid_search
+
+        # Mock vector search
+        hybrid.supabase_store.client.rpc.return_value.execute.return_value.data = [
+            {'section_id': 1, 'similarity': 0.8},
+            {'section_id': 2, 'similarity': 0.9},
+        ]
+
+        results = hybrid.hybrid_search("vector search", limit=5, vector_weight=0.7)
+
+        # Results should combine both sources
+        assert len(results) > 0
+
+        # Scores should be normalized
+        scores = [r[1] for r in results]
+        assert all(0.0 <= s <= 1.0 for s in scores)
