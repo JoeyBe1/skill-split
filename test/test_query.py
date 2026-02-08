@@ -514,6 +514,92 @@ Test content.
             assert isinstance(section, Section), "second element should be Section"
 
 
+class TestQueryAPIFTS5:
+    """Test QueryAPI FTS5 search delegation to DatabaseStore."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.query = QueryAPI(self.temp_db.name)
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def test_search_sections_with_rank_delegates_to_store(self):
+        """search_sections_with_rank() delegates to DatabaseStore."""
+        from unittest.mock import patch
+
+        with patch.object(self.query.store, 'search_sections_with_rank') as mock_search:
+            mock_search.return_value = [(1, 2.5), (2, 1.8)]
+
+            results = self.query.search_sections_with_rank("test query")
+
+            # Verify delegation
+            mock_search.assert_called_once_with("test query", None)
+            assert results == [(1, 2.5), (2, 1.8)]
+
+    def test_search_sections_with_rank_passes_file_path(self):
+        """file_path parameter is passed through to DatabaseStore."""
+        from unittest.mock import patch
+
+        with patch.object(self.query.store, 'search_sections_with_rank') as mock_search:
+            mock_search.return_value = [(1, 2.5)]
+
+            results = self.query.search_sections_with_rank("test", file_path="/test/path.md")
+
+            # Verify file_path is passed
+            mock_search.assert_called_once_with("test", "/test/path.md")
+            assert results == [(1, 2.5)]
+
+    def test_search_sections_with_rank_returns_store_results(self):
+        """Returns results from DatabaseStore unchanged."""
+        from unittest.mock import patch
+
+        expected = [(1, 3.5), (2, 2.1), (3, 0.8)]
+        with patch.object(self.query.store, 'search_sections_with_rank') as mock_search:
+            mock_search.return_value = expected
+
+            results = self.query.search_sections_with_rank("python")
+
+            assert results == expected
+            # Verify no transformation of results
+            assert len(results) == 3
+
+    def test_search_sections_with_rank_integration(self):
+        """Integration test with real DatabaseStore."""
+        from models import ParsedDocument, Section, FileType, FileFormat
+
+        # Store test data
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Python", content="Python handler", line_start=1, line_end=2),
+                Section(level=1, title="Database", content="Database storage", line_start=3, line_end=4),
+            ],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/integration.md"
+        )
+        self.query.store.store_file("/test/integration.md", doc, "test_hash")
+
+        results = self.query.search_sections_with_rank("python")
+
+        # Should delegate to store and get results
+        assert len(results) > 0
+        assert all(isinstance(r, tuple) and len(r) == 2 for r in results)
+
+    def test_search_sections_with_rank_empty_query(self):
+        """Empty query returns empty results via delegation."""
+        results = self.query.search_sections_with_rank("")
+        assert results == []
+
+
 class TestQueryAPIIntegration:
     """Integration tests combining multiple QueryAPI methods."""
 
@@ -601,6 +687,7 @@ def run_tests():
         TestGetNextSection,
         TestGetSectionTree,
         TestSearchSections,
+        TestQueryAPIFTS5,
         TestQueryAPIIntegration,
     ]
 
