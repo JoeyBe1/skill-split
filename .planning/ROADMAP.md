@@ -13,10 +13,11 @@ This roadmap closes 5 identified production gaps in the skill-split system. Each
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Hybrid Search Scoring** — Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
-- [ ] **Phase 2: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup
-- [ ] **Phase 3: Transaction Safety** - Add atomic multi-file checkout operations
-- [ ] **Phase 4: Backup/Restore** - Implement automated backup and disaster recovery
-- [ ] **Phase 5: API Key Security** - Remove API keys from environment variables
+- [x] **Phase 2: Search Fix** — Fix CLI search, add query preprocessing, FTS5 sync, child navigation, and documentation ✓ (2026-02-08)
+- [ ] **Phase 3: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup
+- [ ] **Phase 4: Transaction Safety** - Add atomic multi-file checkout operations
+- [ ] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery
+- [ ] **Phase 6: API Key Security** - Remove API keys from environment variables
 
 ## Phase Details
 
@@ -40,11 +41,34 @@ Plans:
 - [x] 01-01-PLAN.md — Implement FTS5-based text scoring with rank normalization ✓
 - [x] 01-02-PLAN.md — Add text search quality tests for relevance verification ✓
 
-### Phase 2: Batch Embeddings
+### Phase 2: Search Fix
+
+**Goal**: CLI search uses FTS5 BM25 ranking with intelligent query preprocessing and comprehensive documentation
+
+**Depends on**: Phase 1 (FTS5 implementation)
+
+**Success Criteria** (what must be TRUE):
+1. CLI search uses FTS5 BM25 ranking instead of LIKE queries
+2. Multi-word queries use OR for discovery ("setup git" finds sections with either word)
+3. Exact phrases preserved with quotes
+4. Progressive disclosure supports child navigation via --child flag
+5. FTS5 index stays synchronized after all CRUD operations
+6. Comprehensive documentation explains all search modes and navigation
+
+**Plans**: 5 plans
+
+Plans:
+- [x] 02-01-PLAN.md — CLI search command FTS5 integration ✓
+- [x] 02-02-PLAN.md — Smart query preprocessing for natural language ✓
+- [x] 02-03-PLAN.md — FTS5 index synchronization fixes ✓
+- [x] 02-04-PLAN.md — Child navigation for progressive disclosure ✓
+- [x] 02-05-PLAN.md — Comprehensive search and navigation documentation ✓
+
+### Phase 3: Batch Embeddings
 
 **Goal**: Large file embedding generation is 10-100x faster through batch API calls
 
-**Depends on**: Nothing (can run in parallel with Phase 1)
+**Depends on**: Nothing (can run in parallel with Phases 1-2)
 
 **Requirements**: GS-02
 
@@ -57,14 +81,14 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure
-- [ ] 02-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks
+- [ ] 03-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure
+- [ ] 03-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks
 
-### Phase 3: Transaction Safety
+### Phase 4: Transaction Safety
 
 **Goal**: Multi-file checkout operations are atomic (all-or-nothing) with automatic rollback on failure
 
-**Depends on**: Nothing (can run in parallel with Phases 1-2)
+**Depends on**: Nothing (can run in parallel with Phases 1-3)
 
 **Requirements**: GS-03
 
@@ -77,14 +101,14 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: Wrap checkout_manager.py operations in database transactions
-- [ ] 03-02: Add transaction rollback tests for multi-file failure scenarios
+- [ ] 04-01: Wrap checkout_manager.py operations in database transactions
+- [ ] 04-02: Add transaction rollback tests for multi-file failure scenarios
 
-### Phase 4: Backup/Restore
+### Phase 5: Backup/Restore
 
 **Goal**: User can create automated database backups and restore from them for disaster recovery
 
-**Depends on**: Nothing (can run in parallel with Phases 1-3)
+**Depends on**: Nothing (can run in parallel with Phases 1-4)
 
 **Requirements**: GS-04
 
@@ -97,14 +121,14 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: Create backup module with SQLite dump functionality
-- [ ] 04-02: Add restore command with integrity validation
+- [ ] 05-01: Create backup module with SQLite dump functionality
+- [ ] 05-02: Add restore command with integrity validation
 
-### Phase 5: API Key Security
+### Phase 6: API Key Security
 
 **Goal**: API keys retrieved from secure storage, not environment variables
 
-**Depends on**: Nothing (can run in parallel with Phases 1-4)
+**Depends on**: Nothing (can run in parallel with Phases 1-5)
 
 **Requirements**: GS-05
 
@@ -117,20 +141,20 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 05-01: Add secret manager integration (HashiCorp Vault or AWS Secrets Manager)
-- [ ] 05-02: Add fallback to environment variables for local development
-- [ ] 05-03: Update tests to support secret manager mocking
+- [ ] 06-01: Add secret manager integration (HashiCorp Vault or AWS Secrets Manager)
+- [ ] 06-02: Add fallback to environment variables for local development
+- [ ] 06-03: Update tests to support secret manager mocking
 
 ## Requirements Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GS-01 | Phase 1 | Complete |
-| GS-02 | Phase 2 | Ready to execute |
-| GS-03 | Phase 3 | Planned |
-| GS-04 | Phase 4 | Planned |
-| GS-05 | Phase 5 | Planned |
+| GS-02 | Phase 3 | Planned |
+| GS-03 | Phase 4 | Planned |
+| GS-04 | Phase 5 | Planned |
+| GS-05 | Phase 6 | Planned |
 
 ---
 *Roadmap created: 2026-02-08*
-*Last updated: 2026-02-08*
+*Last updated: 2026-02-08 (Phase 2 complete)*
