@@ -54,11 +54,11 @@ Plans:
 3. Batch embedding fails gracefully with partial results if API rate limit exceeded
 4. All existing embedding tests pass with batch implementation
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Refactor EmbeddingService.generate_embedding() to support batch processing
-- [ ] 02-02: Add batch integration tests and performance benchmarks
+- [ ] 02-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure
+- [ ] 02-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks
 
 ### Phase 3: Transaction Safety
 
@@ -125,8 +125,8 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GS-01 | Phase 1 | Ready to execute |
-| GS-02 | Phase 2 | Planned |
+| GS-01 | Phase 1 | Complete |
+| GS-02 | Phase 2 | Ready to execute |
 | GS-03 | Phase 3 | Planned |
 | GS-04 | Phase 4 | Planned |
 | GS-05 | Phase 5 | Planned |

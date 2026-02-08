@@ -5,229 +5,218 @@
 ## Naming Patterns
 
 **Files:**
-- `snake_case` for all Python modules and scripts
-- Test files prefixed with `test_`: `test_parser.py`, `test_database.py`
-- Module directories use `snake_case`: `core/`, `handlers/`, `test/`
-- Fixtures directory: `test/fixtures/`
-- `UPPER_CASE.md` for documentation files at project root
-
-**Functions:**
-- `snake_case` for all functions and methods
-- Private methods prefixed with single underscore: `_parse_heading_lines()`, `_read_content()`
-- Private class attributes prefixed with single underscore: `self._conn`, `self._original_bytes`
-- Command functions prefixed with `cmd_`: `cmd_parse()`, `cmd_ingest()`, `cmd_checkout()`
-
-**Variables:**
-- `snake_case` for local variables
-- Constants use `SCREAMING_SNAKE_CASE` for regex patterns: `FRONTMATTER_DELIMITER`, `HEADING_PATTERN`
-- Class attributes use `snake_case` with property decorators where appropriate
-- Type aliases use `PascalCase` when exported: `FileType`, `FileFormat`
+- Modules: snake_case (e.g., `database.py`, `parser.py`, `hybrid_search.py`)
+- Test files: `test_<module>.py` (e.g., `test_parser.py`, `test_database.py`)
+- Classes: PascalCase (e.g., `DatabaseStore`, `Parser`, `FormatDetector`)
+- Functions/methods: snake_case (e.g., `extract_frontmatter`, `parse_file`, `detect_format`)
+- Variables: snake_case (e.g., `file_path`, `section_content`, `db_path`)
+- Constants: UPPER_SNAKE_CASE (e.g., `FRONTMATTER_DELIMITER`, `HEADING_PATTERN`)
 
 **Types:**
-- `PascalCase` for class names: `Parser`, `DatabaseStore`, `BaseHandler`
-- `PascalCase` for enums: `FileFormat`, `FileType`
-- `PascalCase` for type aliases in annotations: `Optional[str]`, `List[Section]`
-- Use `from __future__ import annotations` for forward references in type hints
-
-**Modules:**
-- `snake_case` for all module names
-- `__init__.py` files define `__all__` lists for explicit exports
-- Use `noqa: F401` comments for imported-but-unused exports in `__init__.py`
+- Enums: PascalCase (e.g., `FileFormat`, `FileType`)
+- Data classes: PascalCase (e.g., `Section`, `FileMetadata`, `ParsedDocument`)
+- Type hints: CamelCase for types (e.g., `List[str]`, `Optional[Tuple]`)
 
 ## Code Style
 
 **Formatting:**
-- No explicit formatter configured (no `.black`, `.ruff`, or `.format` config found)
-- 4-space indentation standard (Python default)
-- Max line length appears to be ~100-120 characters (based on code observation)
-- Single quotes preferred for strings: `'test'`, `"string with 'quote'"`
-- Double quotes for docstrings and strings containing single quotes
+- Line length: 88 characters (PEP 8 default)
+- Indentation: 4 spaces
+- Trailing whitespace: No trailing whitespace
+- Newline at end of file: Required
+- Docstrings: Triple quotes on separate lines
 
-**Linting:**
-- No explicit linting config (no `.eslintrc*`, `.flake8`, `.pylintrc`)
-- Use `type: ignore` comments where mypy/pyright might complain
-- Use `noqa: F401` for intentionally unused imports
+**Import Organization:**
+```python
+# Standard library imports
+from __future__ import annotations  # Always at top
+import os
+import sys
 
-**Docstrings:**
-- Google-style docstrings used throughout
-- Triple double quotes for all docstrings: `"""Description"""`
-- Module-level docstrings at top of each file
-- Class docstrings describe purpose and design philosophy
-- Method docstrings include Args, Returns, Raises sections
+# Third-party imports
+from typing import List, Optional, Tuple
+import sqlite3
 
-## Import Organization
+# Local imports
+from core.database import DatabaseStore
+from models import FileFormat, FileType
+```
 
 **Order:**
-1. Standard library imports (`import os`, `from pathlib import Path`)
-2. Third-party imports (`import pytest`, `from dotenv import load_dotenv`)
-3. Local imports (`from core.parser import Parser`, `from models import FileFormat`)
+1. `from __future__ import annotations`
+2. Standard library imports (alphabetical)
+3. Third-party imports (alphabetical)
+4. Local imports (relative imports first, then absolute)
 
-**Path Aliases:**
-- No explicit path aliases configured
-- Use `sys.path.insert(0, ...)` in test files for module imports
-- Use `from __future__ import annotations` for forward compatibility
-- Use `TYPE_CHECKING` imports for type hints without runtime dependencies
+## Documentation
 
-**Conditional imports:**
-- Lazy imports pattern for optional dependencies:
-  ```python
-  SupabaseStore = None
-  def _ensure_supabase_imports():
-      global SupabaseStore
-      if SupabaseStore is None:
-          from core.supabase_store import SupabaseStore as SB
-  ```
+**Module Docstrings:**
+```python
+"""
+Module description.
+
+This module provides functionality for...
+"""
+
+# Additional docstring content if needed
+```
+
+**Function/Method Docstrings:**
+```python
+def extract_frontmatter(self, content: str) -> Tuple[str, str]:
+    """
+    Extract YAML frontmatter from content.
+
+    Args:
+        content: Full file content
+
+    Returns:
+        Tuple of (frontmatter, remaining_content)
+        - frontmatter: YAML content between --- delimiters
+        - remaining_content: Content after frontmatter
+
+    Raises:
+        ValueError: If frontmatter is malformed
+    """
+```
+
+**Class Docstrings:**
+```python
+class Parser:
+    """
+    Parses markdown/YAML files into structured sections.
+
+    Design philosophy:
+    - Validate before every operation
+    - Never silently lose data
+    - Preserve exact whitespace for round-trip verification
+    """
+```
+
+## Function Design
+
+**Size:**
+- Keep functions focused and under 50 lines
+- Complex operations should be broken into smaller helper methods
+- Use class methods for related functionality
+
+**Parameters:**
+- Use type hints for all parameters
+- Keep parameter count under 5 when possible
+- Use default values for optional parameters
+- Prefer keyword arguments for clarity
+
+**Return Values:**
+- Always use type hints
+- Prefer tuples for multiple related values
+- Return empty collections (not None) when applicable
+- Use Optional for nullable returns
 
 ## Error Handling
 
 **Patterns:**
-- Explicit error checking over EAFP: `if not content:` before processing
-- Return `None` for "not found" cases: `get_file()` returns `None` if file doesn't exist
-- Raise exceptions for invalid inputs: `ValueError`, `TypeError`, `FileNotFoundError`
-- Use `try/except` for fallback logic:
-  ```python
-  try:
-      symbols = self._get_symbols_via_lsp()
-  except Exception:
-      symbols = self._get_symbols_via_regex(lines)
-  ```
+```python
+# Use specific exceptions
+raise FileNotFoundError(f"File not found: {self.file_path}")
+raise ValueError(f"Invalid frontmatter format: {error_msg}")
 
-**Validation:**
-- Defensive programming: Check for empty/None before operations
-- Use `ValidationResult` dataclass for structured validation feedback
-- Collect multiple errors before failing: `result.add_error()`
-- File existence checks before reading: `if not path.exists():`
+# Validate input
+if not content:
+    raise ValueError("Content cannot be empty")
 
-**Resource cleanup:**
-- Context managers for database connections: `with sqlite3.connect(...) as conn:`
-- Explicit cleanup in test teardowns: `shutil.rmtree(temp_dir)`
-- Use `tempfile.mkdtemp()` for test isolation
+# Propagate exceptions with context
+try:
+    # operation
+except sqlite3.Error as e:
+    raise DatabaseError(f"Database operation failed: {e}")
+```
 
-## Logging
+**Logging:**
+- Use f-strings for message formatting
+- Include error context in messages
+- Re-raise exceptions with additional context
 
-**Framework:** `print()` statements used (no structured logging framework)
+## Import Style
 
-**Patterns:**
-- Print to stdout for normal output
-- Print to stderr for errors: `print(f"Error: ...", file=sys.stderr)`
-- Return integer exit codes: `return 0` for success, `return 1` for errors
-- No log levels or structured logging
+**Relative vs Absolute:**
+```python
+# Relative imports within package
+from .database import DatabaseStore
+from ..models import FileFormat
 
-## Comments
+# Absolute imports for top-level modules
+from core.database import DatabaseStore
+from models import FileFormat
+```
 
-**When to Comment:**
-- Explain design philosophy at module/class level
-- Document non-obvious algorithms (especially in parser)
-- Note critical behavior for round-trip verification
-- Flag temporal issues or known workarounds
-- Preserve blank lines for byte-perfect integrity (parser comments)
+**Type Hints:**
+```python
+from typing import List, Optional, Dict, Tuple, Any
+from __future__ import annotations  # Enable forward references
+```
 
-**JSDoc/TSDoc:**
-- Google-style docstrings for all public classes and methods
-- Docstring sections: Description, Args, Returns, Raises, Note, Examples
-- Use `Args:` section for all parameters
-- Use `Returns:` section for non-None return values
-- Use `Raises:` section for expected exceptions
-- Use `Note:` for important behavioral details
-- Use `Examples:` for usage patterns
+## Class Design
 
-**Inline comments:**
-- Explain "why" not "what"
-- Use comments for temporary workarounds
-- Flag incomplete implementations with explicit notes
-- Comment critical preservation logic: `# NOTE: Preserve blank lines for byte-perfect round-trip`
+**Properties:**
+```python
+@property
+def conn(self) -> sqlite3.Connection:
+    """Lazily-initialized database connection."""
+    if self._conn is None:
+        self._conn = sqlite3.connect(self.db_path)
+        self._conn.row_factory = sqlite3.Row
+    return self._conn
+```
 
-## Function Design
+**Context Managers:**
+```python
+def __enter__(self) -> "DatabaseStore":
+    _ = self.conn
+    return self
 
-**Size:** Keep functions focused and under 50 lines when possible
-- Complex parsing functions may be longer (parser methods)
-- Extract helpers when logical units emerge
-- Use private methods for implementation details
+def __exit__(self, exc_type, exc, tb) -> None:
+    if self._conn is not None:
+        self._conn.close()
+        self._conn = None
+```
 
-**Parameters:**
-- Use keyword arguments for options: `def parse(self, validate: bool = True)`
-- Avoid positional arguments beyond 2-3 required params
-- Use dataclasses for grouping related parameters
+**Abstract Classes:**
+```python
+from abc import ABC, abstractmethod
 
-**Return Values:**
-- Return `None` for "not found" cases
-- Return tuples for related values: `return frontmatter, body`
-- Use dataclasses for structured returns: `ValidationResult`, `ParsedDocument`
-- Return `int` exit codes from CLI commands: `0` for success, `1` for failure
+class BaseHandler(ABC):
+    @abstractmethod
+    def parse(self) -> ParsedDocument:
+        """Parse the component into structured sections."""
+        pass
 
-**Type hints:**
-- All functions have type hints on parameters and returns
-- Use `Optional[T]` for nullable returns
-- Use `Union[T1, T2]` for multiple return types
-- Use `List[T]`, `Dict[K, V]` for collections
-- Use `-> None` explicitly for void functions
+    @abstractmethod
+    def validate(self) -> ValidationResult:
+        """Validate component structure and schema."""
+        pass
+```
 
-## Module Design
+## Design Principles
 
-**Exports:**
-- `__all__` lists in `__init__.py` files for explicit public API
-- Use `noqa: F401` for exports imported only for `__all__`
-- Re-export commonly used items from package root
+**Core Philosophy:**
+- Validate before every operation
+- Never silently lose data
+- Preserve exact whitespace for round-trip verification
+- Assume errors to avoid them
 
-**Barrel Files:**
-- `handlers/__init__.py` exports all handler classes
-- `core/__init__.py` exports core utilities: `Validator`, `ValidationResult`
-- `models.py` is the main dataclass module
+**Database Operations:**
+- Use context managers for connections
+- Enable foreign key constraints
+- Use parameterized queries to prevent SQL injection
+- Lazy-initialize connections for test compatibility
 
-**Dependency management:**
-- Use `TYPE_CHECKING` to avoid circular imports for type hints
-- Lazy imports for optional dependencies (Supabase)
-- Factory pattern for handler instantiation to avoid import coupling
-- Use protocols/ABCs for interface definitions
-
-## Dataclass Usage
-
-**Standard patterns:**
-- Use `@dataclass` for data containers
-- Use `field(default_factory=list)` for mutable defaults
-- Use `field(default=None)` for optional fields
-- Use `field(default=False, repr=False)` to exclude from repr
-- Implement `to_dict()` methods for JSON serialization
-
-**Models location:**
-- All dataclasses in `models.py`
-- Enums in `models.py`: `FileType`, `FileFormat`
-- Core models: `Section`, `ParsedDocument`, `FileMetadata`, `ValidationResult`, `ComposedSkill`
-
-## Database Patterns
-
-**Connection management:**
-- Use `with sqlite3.connect() as conn:` for automatic cleanup
-- Enable foreign keys: `conn.execute("PRAGMA foreign_keys = ON")`
-- Use `row_factory = sqlite3.Row` for dict-like access
-- Lazy initialization pattern for compatibility: `@property def conn(self)`
-
-**Schema:**
-- Use `CREATE TABLE IF NOT EXISTS` for idempotency
-- Use `CREATE INDEX IF NOT EXISTS` for indexes
-- Use `ON DELETE CASCADE` for foreign keys
-- Store JSON in TEXT columns (frontmatter, original JSON)
-
-**Transactions:**
-- Explicit `conn.commit()` after modifications
-- Use context managers for automatic rollback on error
-- Separate read connections from write connections
-
-## Testing Patterns (for convention reference)
-
-**Test structure:**
-- Use `pytest` framework
-- Test classes named `Test<ClassName>`: `TestParser`, `TestDatabase`
-- Test methods named `test_<action>_<scenario>`: `test_parse_simple_headings`
-- Use `setup_method()` and `teardown_method()` for fixtures
-- Use `@pytest.fixture` for reusable test data
-
-**Test organization:**
-- Mirror source structure: `test/test_handlers/` mirrors `handlers/`
-- Fixture files in `test/fixtures/`
-- Use `tempfile.mkdtemp()` for test isolation
-- Mock external dependencies: `unittest.mock.MagicMock`
+**File Operations:**
+- Always use explicit encoding (utf-8)
+- Use Path objects for file paths
+- Check file existence before operations
+- Clean up temporary resources
 
 ---
 
 *Convention analysis: 2026-02-08*
+```

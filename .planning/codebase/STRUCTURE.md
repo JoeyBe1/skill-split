@@ -6,198 +6,171 @@
 
 ```
 skill-split/
-├── core/               # Core parsing, storage, and query modules
-├── handlers/           # File type-specific handlers (plugins, scripts)
-├── test/               # Test suite with 499 tests
-├── test/test_handlers/ # Handler-specific tests
-├── test/fixtures/      # Test fixtures and sample files
-├── migrations/         # Database schema migrations
-├── scripts/            # Utility scripts (embedding generation, monitoring)
-├── demo/               # Demo scripts and examples
-├── tests/              # Legacy test directory (plugins, agents)
-├── .archive/           # Archived development artifacts
-├── .planning/          # Planning and codebase documentation
-├── .serena/            # Serena memory system cache
-├── .claude/            # Claude Code configuration and skills
-├── skill_split.py      # Main CLI entry point
-├── models.py           # Data models and enums
-├── conftest.py         # Pytest configuration
-└── requirements.txt    # Python dependencies
+├── skill_split.py              # Main CLI entry point
+├── models.py                  # Data models and enums
+├── requirements.txt           # Python dependencies
+├── .env                       # Environment variables
+├── core/                      # Core functionality
+│   ├── parser.py              # Markdown/YAML parser
+│   ├── database.py            # SQLite storage operations
+│   ├── recomposer.py          # File reconstruction
+│   ├── validator.py            # Round-trip validation
+│   ├── detector.py            # File format detection
+│   ├── hashing.py             # SHA256 integrity
+│   ├── query.py               # Progressive disclosure API
+│   ├── query_interface.py     # Query interface implementation
+│   ├── frontmatter_generator.py # Auto-generates frontmatter
+│   ├── skill_composer.py      # Composes new skills
+│   ├── skill_validator.py      # Validates composed skills
+│   ├── supabase_store.py      # Remote storage integration
+│   ├── checkout_manager.py    # File deployment tracking
+│   ├── embedding_service.py   # Vector embeddings
+│   └── hybrid_search.py       # BM25 + Vector search
+├── handlers/                   # Component and script handlers
+│   ├── base.py                # Abstract handler base
+│   ├── factory.py             # Handler creation
+│   ├── component_detector.py  # File type detection
+│   ├── plugin_handler.py      # Plugin.json parsing
+│   ├── hook_handler.py        # Hook parsing
+│   ├── config_handler.py     # Config parsing
+│   ├── script_handler.py     # Base for script parsing
+│   ├── python_handler.py      # Python files
+│   ├── javascript_handler.py # JavaScript files
+│   ├── typescript_handler.py  # TypeScript files
+│   └── shell_handler.py       # Shell scripts
+├── test/                      # Test suite
+│   ├── test_*.py              # Core module tests
+│   ├── test_handlers/         # Handler-specific tests
+│   └── fixtures/              # Test data files
+├── demo/                      # Demonstration scripts
+├── migrations/                # Database schema migrations
+├── .archive/                  # Historical artifacts
+└── .planning/                 # Project planning documents
 ```
 
 ## Directory Purposes
 
-**core/:**
-- Purpose: Core parsing, storage, and query functionality
-- Contains: Parser, database stores, query API, composition logic, vector search
-- Key files: `parser.py`, `database.py`, `supabase_store.py`, `query.py`, `skill_composer.py`
+**[core/]:**
+- Purpose: Fundamental processing pipeline
+- Contains: Parser, database, recomposer, validation
+- Key files:
+  - `parser.py` - Markdown/YAML structure extraction
+  - `database.py` - SQLite with CASCADE delete
+  - `recomposer.py` - Byte-perfect reconstruction
+  - `query.py` - Progressive disclosure API
 
-**handlers/:**
-- Purpose: File type-specific parsing via handler pattern
-- Contains: Base handler, factory, component and script handlers
-- Key files: `base.py`, `factory.py`, `plugin_handler.py`, `python_handler.py`, `shell_handler.py`
+**[handlers/]:**
+- Purpose: Specialized file type processing
+- Contains: Factory, detector, and specific handlers
+- Key files:
+  - `factory.py` - Handler creation and selection
+  - `component_detector.py` - File type detection
+  - `plugin_handler.py` - Plugin JSON parsing
+  - `script_handler.py` - Base for script handlers
 
-**test/ and test/test_handlers/:**
-- Purpose: Comprehensive test coverage for all modules
+**[test/]:**
+- Purpose: Comprehensive test coverage
 - Contains: Unit tests, integration tests, fixtures
-- Key files: `test_parser.py`, `test_database.py`, `test_handlers/test_plugin_handler.py`
+- Key files:
+  - `test_parser.py` - Parser functionality
+  - `test_database.py` - Database operations
+  - `test_handlers/` - Handler-specific tests
 
-**migrations/:
-- Purpose: Database schema evolution and Supabase setup
-- Contains: SQL migration scripts, migration guide
-- Key files: `enable_pgvector.sql`, `create_embeddings_table.sql`, `SCHEMA_MIGRATION_GUIDE.md`
+**[demo/]:**
+- Purpose: Usage demonstrations
+- Contains: Shell scripts showing end-to-end usage
 
-**scripts/:**
-- Purpose: Operational utilities for embedding generation and monitoring
-- Contains: Batch embedding generation, metadata monitoring
-- Key files: `generate_embeddings.py`, `monitor_embeddings.py`
-
-**demo/:**
-- Purpose: Example usage and demonstration scripts
-- Contains: Progressive disclosure demo, handler demos
-- Key files: `progressive_disclosure.sh`, `script_handlers_demo.py`
+**[migrations/]:**
+- Purpose: Database schema evolution
+- Contains: SQL migration scripts
 
 ## Key File Locations
 
 **Entry Points:**
-- `skill_split.py`: Main CLI with 16 commands for parsing, querying, composing
-- `models.py`: All data classes (Section, ParsedDocument, FileFormat, FileType enums)
+- `skill_split.py` - Main CLI with 16 commands
+- `core/parser.py` - File parsing entry point
+- `core/query.py` - Query API entry point
 
 **Configuration:**
-- `.env`: Environment variables (SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY, SKILL_SPLIT_DB)
-- `conftest.py`: Pytest fixtures and test configuration
+- `models.py` - Type definitions and enums
+- `requirements.txt` - Python dependencies
+- `.env` - Environment variables
 
 **Core Logic:**
-- `core/parser.py`: Markdown/XML parsing with heading and tag support
-- `core/database.py`: SQLite storage with CASCADE delete and hierarchical queries
-- `core/supabase_store.py`: Supabase client with vector search and checkout tracking
-- `core/query.py`: Progressive disclosure API (get_section, get_next_section, search_sections)
-- `core/skill_composer.py`: Skill composition from multiple sections
-- `core/checkout_manager.py`: File deployment with multi-file support
-- `core/hybrid_search.py`: Vector + text search with adjustable weighting
-- `core/embedding_service.py`: OpenAI embeddings with caching and batch generation
-
-**Handlers:**
-- `handlers/base.py`: Abstract BaseHandler class defining handler interface
-- `handlers/factory.py`: HandlerFactory for creating appropriate handlers
-- `handlers/component_detector.py`: File type detection from path patterns
-- `handlers/plugin_handler.py`: Plugin component parsing (plugin.json + .mcp.json + hooks.json)
-- `handlers/hook_handler.py`: Hook component parsing (hooks.json + shell scripts)
-- `handlers/config_handler.py`: Settings and MCP config parsing
-- `handlers/python_handler.py`: Python file parsing (classes, functions, methods)
-- `handlers/javascript_handler.py`: JavaScript/JSX parsing
-- `handlers/typescript_handler.py`: TypeScript/TSX parsing with interface support
-- `handlers/shell_handler.py`: Shell script function block parsing
+- `core/database.py` - SQLite operations with foreign keys
+- `core/recomposer.py` - File reconstruction
+- `core/validator.py` - Round-trip validation
+- `core/hashing.py` - Integrity verification
 
 **Testing:**
-- `test/test_parser.py`: Parser tests for markdown, XML, mixed formats
-- `test/test_database.py`: DatabaseStore CRUD and cascade tests
-- `test/test_supabase_store.py`: SupabaseStore integration tests
-- `test/test_handlers/`: Individual handler tests with fixtures
-- `test/test_skill_composer.py`: Composition logic tests
-- `test/test_vector_search*.py`: Hybrid search integration tests
+- `test/` - All test files
+- `test/fixtures/` - Test data files
 
 ## Naming Conventions
 
 **Files:**
-- `core/<module>.py`: Core functionality modules
-- `handlers/<type>_handler.py`: Handler implementations
-- `test/test_<module>.py`: Test files matching source modules
-- `<script>.py`: Standalone scripts in root directory
-
-**Directories:**
-- `core/`: Core business logic
-- `handlers/`: Pluggable file type handlers
-- `test/`: All test code (pytest)
-- `test/fixtures/`: Test data and sample files
-- `migrations/`: Database schema changes
-- `scripts/`: Operational utilities
-- `demo/`: Usage examples
-
-**Classes:**
-- `<Name>Handler`: Handler classes (e.g., PluginHandler, PythonHandler)
-- `<Name>Store`: Storage backends (e.g., DatabaseStore, SupabaseStore)
-- `<Name>API`: Query interfaces (e.g., QueryAPI)
-- <Name>Manager`: Complex orchestration (e.g., CheckoutManager, SkillComposer)
+- `snake_case.py` for Python modules
+- `PascalCase` for class names
+- `camelCase` for method names
+- `SCREAMING_SNAKE_CASE` for constants
 
 **Functions:**
-- `cmd_<name>()`: CLI command handlers in skill_split.py
-- `_<name>()`: Private methods within classes
-- `is_<name>()`: Boolean predicate functions
-- `get_<name>()`: Getter/retrieval functions
+- `verb_noun()` - Action-oriented names
+- `get_thing()` - Getter pattern
+- `is_thing()` - Predicate pattern
+- `_internal_method()` - Private methods with underscore
+
+**Variables:**
+- `snake_case` for local variables
+- `camelCase` for loop variables
+- `_private_var` for internal use
 
 ## Where to Add New Code
 
-**New Handler (file type support):**
-- Primary code: `handlers/<type>_handler.py`
-- Base class: Extend `handlers/base.py::BaseHandler`
-- Tests: `test/test_handlers/test_<type>_handler.py`
-- Factory: Register in `handlers/factory.py::HandlerFactory.get_handler_for_type()`
-- Detector: Add pattern to `handlers/component_detector.py`
+**New File Type Handler:**
+- Implementation: `handlers/new_handler.py`
+- Registration: Update `handlers/component_detector.py`
+- Tests: Add to `test/test_handlers/`
 
-**New Core Module:**
-- Implementation: `core/<module>.py`
-- Tests: `test/test_<module>.py`
-- Import pattern: Use `from core.<module> import <Name>` in CLI
+**New Search Mode:**
+- Implementation: Extend `core/hybrid_search.py`
+- CLI command: Add to `skill_split.py`
+- Tests: Add to `test/test_query.py`
 
-**New CLI Command:**
-- Implementation: `skill_split.py::cmd_<name>()`
-- Registration: Add subparser in `skill_split.py::main()`
+**New Validation Rule:**
+- Implementation: Extend `core/validator.py`
+- Integration: Update round-trip validation
+- Tests: Add validation tests
 
-**New Database Migration:**
-- Schema: `migrations/<description>.sql`
-- Documentation: Update `migrations/SCHEMA_MIGRATION_GUIDE.md`
+**New Database Feature:**
+- Implementation: Extend `core/database.py`
+- Schema: Update `migrations/` if needed
+- Tests: Add database operation tests
 
-**New Search/Query Feature:**
-- Implementation: `core/<feature>.py`
-- Integration: Add to `core/query.py::QueryAPI` or create new service
-- Tests: `test/test_<feature>.py`
-
-**Utilities:**
-- Shared helpers: `core/<utility>.py` or root-level `<utility>.py`
-- Standalone scripts: `scripts/<script>.py`
+**New Component Type:**
+- Implementation: New handler in `handlers/`
+- Detection: Update `handlers/component_detector.py`
+- Factory: Update `handlers/factory.py`
 
 ## Special Directories
 
-**.planning/:**
-- Purpose: Planning documents and codebase analysis (this file)
-- Generated: Yes - by GSD mapping commands
-- Committed: Yes - part of repository
+**[.planning/]:**
+- Purpose: Project planning and documentation
+- Contains: Phase plans, architecture docs, test reports
+- Generated: By GSD workflow
+- Committed: Yes
 
-**.claude/:**
-- Purpose: Claude Code configuration and local skills
-- Generated: Partially - insights/ subdirectory is generated
-- Committed: Configuration committed, insights may be ephemeral
+**[.archive/]:**
+- Purpose: Historical artifacts and deprecated code
+- Contains: Old versions, investigations, reports
+- Generated: By cleanup processes
+- Committed: Yes (for history)
 
-**.archive/:**
-- Purpose: Historical development artifacts, old reports
-- Generated: Yes - from previous development cycles
-- Committed: Yes - for historical reference
-
-**.serena/:**
-- Purpose: Serena memory system cache
-- Generated: Yes - by Serena agent
-- Committed: No - cached data, may be gitignored
-
-**.pytest_cache/:**
-- Purpose: Pytest cache for optimized test runs
-- Generated: Yes - automatically by pytest
-- Committed: No - gitignored
-
-**__pycache__/:**
-- Purpose: Python bytecode cache
-- Generated: Yes - automatically by Python interpreter
-- Committed: No - gitignored
-
-**node_modules/:**
-- Purpose: Node.js dependencies (if any present)
-- Generated: Yes - by npm install
-- Committed: No - gitignored
-
-**migrations/:**
-- Purpose: Database schema migrations for Supabase
-- Generated: No - manually authored SQL scripts
-- Committed: Yes - version controlled schema changes
+**[test/fixtures/]:**
+- Purpose: Test data files
+- Contains: Sample markdown, JSON, script files
+- Generated: Manual creation
+- Committed: Yes
 
 ---
 

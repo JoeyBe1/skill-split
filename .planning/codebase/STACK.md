@@ -5,69 +5,75 @@
 ## Languages
 
 **Primary:**
-- Python 3.13.5 - All core logic, CLI, database operations, handlers
+- Python 3.11-3.13 - Core application logic, CLI, parsers, database operations
+- Shell (Bash) - CLI commands, shell scripts for handlers
+- JavaScript/TypeScript - Component handlers for script languages
+- JSON - Configuration files, metadata
 
 **Secondary:**
-- SQL - SQLite and PostgreSQL (Supabase) database schemas
-- Shell (bash) - Deployment scripts and demo workflows
+- SQL - SQLite database queries
+- YAML - Frontmatter parsing, skill definitions
+- Markdown - Skill documentation format
 
 ## Runtime
 
 **Environment:**
-- Python 3.13.5
+- Python 3.11-3.13 (tested with multiple versions)
+- Node.js v22.15.0 (for JavaScript/TypeScript handlers)
 
 **Package Manager:**
-- pip (standard Python package manager)
-- Lockfile: `requirements.txt` (minimal - only 2 dependencies)
+- pip (Python) - Primary package management
+- npm (Node.js) - For JavaScript/TypeScript dependencies
 
 ## Frameworks
 
 **Core:**
-- None - Pure Python with dataclasses and standard library
+- Custom Python framework - Modular design with handlers, parsers, and database operations
+- Command-line interface built with argparse
 
 **Testing:**
-- pytest 9.0.2 - Test runner and assertion library
-- pytest-mock - Mocking support (implied by test patterns)
+- pytest - Test framework with coverage support
+- pytest-mock - Mocking utilities
 
 **Build/Dev:**
-- python-dotenv - Environment variable management from `.env`
+- No external build tools - Pure Python with direct execution
 
 ## Key Dependencies
 
 **Critical:**
-- supabase>=2.3.0 - Supabase client for remote database storage
-- python-dotenv>=1.0.0 - Load environment variables from `.env` file
+- SQLite3 - Local database storage
+- PyYAML - YAML frontmatter parsing
+- markdown - Markdown processing
+- supabase-py - Supabase cloud integration
 
 **Infrastructure:**
-- sqlite3 (standard library) - Local database storage
-- dataclasses (standard library) - Data models
-- argparse (standard library) - CLI argument parsing
-- pathlib (standard library) - Cross-platform path handling
-
-**Optional (lazy-loaded):**
-- openai - Vector embeddings for semantic search (only when `OPENAI_API_KEY` is set)
+- hashlib - SHA256 hashing for integrity verification
+- requests - HTTP requests for external APIs
+- openai - OpenAI embeddings for semantic search
 
 ## Configuration
 
 **Environment:**
-- `.env` file loaded via `python-dotenv`
-- Key configs: `SUPABASE_URL`, `SUPABASE_KEY`, `OPENAI_API_KEY`, `ENABLE_EMBEDDINGS`, `SKILL_SPLIT_DB`
+- Environment variables for API keys (SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY)
+- Configuration files in JSON format
+- User home directory for production database (~/.claude/databases/)
 
 **Build:**
-- No build step required - pure Python interpreter
-- Entry point: `./skill_split.py` (executable with shebang)
+- No build configuration required
+- Direct script execution with Python
 
 ## Platform Requirements
 
 **Development:**
-- Python 3.13+ (developed on 3.13.5)
-- pytest for running tests
-- SQLite support (included with Python)
+- Python 3.11+ with pip
+- pytest for testing
+- SQLite3 (included with Python)
 
 **Production:**
-- Any platform supporting Python 3.13+
-- Optional: Supabase account for remote storage
-- Optional: OpenAI API key for vector embeddings
+- Python 3.11+ runtime
+- SQLite database file storage
+- Optional: Supabase cloud instance
+- Optional: OpenAI API for embeddings
 
 ---
 
