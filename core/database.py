@@ -587,6 +587,58 @@ class DatabaseStore:
 
             return results
 
+    def search_sections_with_rank(
+        self, query: str, file_path: Optional[str] = None
+    ) -> List[Tuple[int, float]]:
+        """
+        Search sections using FTS5 full-text search with relevance ranking.
+
+        Uses BM25 algorithm for ranking based on term frequency and
+        inverse document frequency. Returns results with relevance scores
+        where higher = more relevant.
+
+        Args:
+            query: Search string (FTS5 MATCH syntax)
+            file_path: Optional file path to limit search to one file
+
+        Returns:
+            List of (section_id, rank) tuples where rank is negative BM25 score
+            (higher values = more relevant, so we negate for compatibility)
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            if file_path:
+                # Single file search with FTS
+                cursor = conn.execute(
+                    """
+                    SELECT s.id, bm25(sections_fts) as rank
+                    FROM sections_fts
+                    JOIN sections s ON sections_fts.rowid = s.id
+                    JOIN files f ON s.file_id = f.id
+                    WHERE sections_fts MATCH ? AND f.path = ?
+                    ORDER BY rank
+                    """,
+                    (query, file_path)
+                )
+            else:
+                # Cross-file search with FTS
+                cursor = conn.execute(
+                    """
+                    SELECT s.id, bm25(sections_fts) as rank
+                    FROM sections_fts
+                    JOIN sections s ON sections_fts.rowid = s.id
+                    WHERE sections_fts MATCH ?
+                    ORDER BY rank
+                    """,
+                    (query,)
+                )
+
+            # Return (section_id, normalized_rank) tuples
+            # BM25 returns negative scores, negate for "higher = better"
+            results = [(row["id"], -row["rank"]) for row in cursor.fetchall()]
+            return results
+
     def list_files_by_prefix(self, prefix: str) -> List[Dict]:
         """
         List files whose path starts with the given prefix.

@@ -196,3 +196,21 @@ class QueryAPI:
                 results.append((row["id"], section))
 
         return results
+
+    def search_sections_with_rank(
+        self, query: str, file_path: Optional[str] = None
+    ) -> List[tuple[int, float]]:
+        """
+        Search sections using FTS5 full-text search with relevance ranking.
+
+        Delegates to DatabaseStore which performs BM25 ranking based on
+        term frequency and inverse document frequency.
+
+        Args:
+            query: Search string
+            file_path: Optional file path to limit search to one file
+
+        Returns:
+            List of (section_id, rank) tuples where higher rank = more relevant
+        """
+        return self.store.search_sections_with_rank(query, file_path)
