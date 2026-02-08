@@ -12,7 +12,7 @@ This roadmap closes 5 identified production gaps in the skill-split system. Each
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Hybrid Search Scoring** - Replace placeholder text scoring with proper full-text search
+- [x] **Phase 1: Hybrid Search Scoring** — Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
 - [ ] **Phase 2: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup
 - [ ] **Phase 3: Transaction Safety** - Add atomic multi-file checkout operations
 - [ ] **Phase 4: Backup/Restore** - Implement automated backup and disaster recovery
@@ -37,8 +37,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Implement FTS5-based text scoring with rank normalization
-- [ ] 01-02-PLAN.md — Add text search quality tests for relevance verification
+- [x] 01-01-PLAN.md — Implement FTS5-based text scoring with rank normalization ✓
+- [x] 01-02-PLAN.md — Add text search quality tests for relevance verification ✓
 
 ### Phase 2: Batch Embeddings
 

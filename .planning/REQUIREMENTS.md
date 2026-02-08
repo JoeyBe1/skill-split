@@ -11,7 +11,7 @@ Requirements for closing identified production gaps.
 
 **Performance & Quality:**
 
-- [ ] **GS-01**: Fix hybrid search text scoring
+- [x] **GS-01**: Fix hybrid search text scoring ✓ Complete (2026-02-08)
   - Replace placeholder position-based scoring with proper full-text search
   - Use SQLite FTS5 or Supabase text search with rank normalization
   - Files: `core/hybrid_search.py:179-196`, `core/hybrid_search.py:282`
@@ -58,7 +58,7 @@ Requirements for closing identified production gaps.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GS-01 | Phase 1 | Pending |
+| GS-01 | Phase 1 | Complete ✓ |
 | GS-02 | Phase 2 | Pending |
 | GS-03 | Phase 3 | Pending |
 | GS-04 | Phase 4 | Pending |
@@ -78,4 +78,5 @@ Requirements for closing identified production gaps.
 
 ---
 *Requirements defined: 2026-02-08*
+*Last updated: 2026-02-08 (GS-01 complete)*
 *Last updated: 2026-02-08 after roadmap creation*
