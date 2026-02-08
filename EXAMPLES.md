@@ -1,10 +1,206 @@
 # skill-split Usage Examples
 
-This document demonstrates practical scenarios for using skill-split to manage files through progressive disclosure, including the new component handler support for plugins, hooks, and configuration files.
+This document demonstrates practical scenarios for using skill-split to manage files through progressive disclosure, including search capabilities and component handler support for plugins, hooks, and configuration files.
 
 ---
 
-## Scenario 1: Progressive Skill Disclosure
+## Search Workflows
+
+### Finding Relevant Skills
+
+**Scenario:** You need a git setup command but don't know which skill has it.
+
+```bash
+# Search for git-related content (BM25 keyword search)
+./skill_split.py search "git setup"
+```
+
+**Result:**
+```
+Found 8 section(s) matching 'git setup':
+
+ID      Score   Title                                         File
+-------- -------- -------------------------------------------- ----------------------------------------
+156     3.42    Clone Repository                              /skills/version-control/SKILL.md
+42      2.85    Initial Setup                                 /skills/workflow/SKILL.md
+203     2.18    Configuration                                 /skills/version-control/SKILL.md
+```
+
+Now you can load the specific section:
+
+```bash
+./skill_split.py get-section 156
+```
+
+### Exact Phrase Search
+
+**Scenario:** You need the exact "python handler" implementation, not sections about python OR handlers.
+
+```bash
+# Use quotes for exact phrase
+./skill_split.py search '"python handler"'
+```
+
+### Narrowing Results with AND
+
+**Scenario:** You want sections about both "python" AND "testing".
+
+```bash
+# Explicit AND for narrow results
+./skill_split.py search "python AND testing"
+```
+
+### Broad Discovery with OR
+
+**Scenario:** You want to find anything related to "repository" OR "storage".
+
+```bash
+# Multi-word automatically uses OR (broad discovery)
+./skill_split.py search "repository storage"
+
+# Or explicit OR
+./skill_split.py search "repository OR storage"
+```
+
+### Semantic Search (Vector)
+
+**Scenario:** You want to find content about "code execution" even if those exact words aren't used.
+
+```bash
+# Requires OPENAI_API_KEY and Supabase
+ENABLE_EMBEDDINGS=true ./skill_split.py search-semantic "code execution" --vector-weight 1.0
+```
+
+This finds semantically similar content like "running scripts", "execute commands", "process execution", etc.
+
+### Hybrid Search (Best of Both)
+
+**Scenario:** You want comprehensive results combining keywords and semantic meaning.
+
+```bash
+# 70% semantic, 30% keyword (default)
+ENABLE_EMBEDDINGS=true ./skill_split.py search-semantic "python error handling" --vector-weight 0.7
+```
+
+This finds sections with "python" and "error" keywords, plus semantically similar content about exceptions, debugging, troubleshooting, etc.
+
+## Progressive Disclosure Workflows
+
+### Loading Large Skills Token-Efficiently
+
+**Scenario:** A skill has 50 sections. You only need the specific "Configuration" section.
+
+```bash
+# Step 1: List file structure
+./skill_split.py list /skills/programming/SKILL.md
+
+# Output shows:
+# ID  Title
+# --- ----------------------------------
+# 1  Overview
+# 2  Installation
+# 3  Basic Usage
+# 4  Advanced Usage
+# 5  Configuration              <-- This is what you want
+# 6  Troubleshooting
+
+# Step 2: Load just the Configuration section
+./skill_split.py get-section 5 --db ~/.claude/databases/skill-split.db
+
+# Output:
+# --- Section Configuration (Level 1) ---
+#
+# Configuration options include:
+# - timeout: Request timeout in milliseconds
+# - retries: Number of retry attempts
+# ...
+```
+
+**Token savings:** Instead of loading the entire 50-section skill (21KB), you load just one section (204 bytes) - **99% context savings**.
+
+### Hierarchical Navigation
+
+**Scenario:** A skill has nested sections. You want to explore subsections under "Advanced Topics".
+
+```bash
+# Step 1: Find the parent section ID
+./skill_split.py list /skills/programming/SKILL.md | grep -i advanced
+
+# Output: 4  Advanced Topics                    1
+
+# Step 2: Navigate to first child subsection
+./skill_split.py next 4 /skills/programming/SKILL.md --child
+
+# Output: Shows first subsection under Advanced Topics
+
+# Step 3: Continue navigating through siblings
+./skill_split.py next <subsection_id> /skills/programming/SKILL.md
+```
+
+### Sequential Reading Workflow
+
+**Scenario:** Reading through a tutorial skill section by section.
+
+```bash
+# Start with first section
+./skill_split.py get-section 1
+
+# Read sequentially
+./skill_split.py next 1 /skills/tutorial/SKILL.md
+./skill_split.py next 2 /skills/tutorial/SKILL.md
+./skill_split.py next 3 /skills/tutorial/SKILL.md
+# ... continue as needed
+```
+
+## Combined Search + Navigation Workflow
+
+### Finding and Exploring Related Content
+
+**Scenario:** You're working on database optimization and want to find related skills, then explore them.
+
+```bash
+# Step 1: Search for database content
+./skill_split.py search "database optimization"
+
+# Result shows section 156 in /skills/backend/SKILL.md with score 3.42
+
+# Step 2: Load that section
+./skill_split.py get-section 156
+
+# Step 3: See what else is in that skill
+./skill_split.py list /skills/backend/SKILL.md
+
+# Step 4: Explore related sections
+./skill_split.py next 156 /skills/backend/SKILL.md
+./skill_split.py next 156 /skills/backend/SKILL.md --child  # Drill into subsections
+```
+
+### Cross-File Research
+
+**Scenario:** Researching how different skills handle error handling.
+
+```bash
+# Search across all files
+./skill_split.py search "error handling"
+
+# Results show sections from multiple files:
+# - /skills/backend/SKILL.md (section 42)
+# - /skills/frontend/SKILL.md (section 87)
+# - /skills/api/SKILL.md (section 15)
+
+# Compare approaches
+./skill_split.py get-section 42  # Backend approach
+./skill_split.py get-section 87  # Frontend approach
+./skill_split.py get-section 15  # API approach
+```
+
+---
+
+## Component Handler Workflows
+
+The following scenarios demonstrate component handler support for plugins, hooks, and configuration files, building on the search and progressive disclosure workflows shown above.
+
+### Scenario 1: Progressive Skill Disclosure
 
 **Use Case**: Load a skill incrementally to stay within token budgets and improve focus.
 
@@ -110,7 +306,7 @@ Sections: 4
 
 ---
 
-## Scenario 2: Searching Across Skills
+### Scenario 2: Searching Across Skills
 
 **Use Case**: Find and manage multiple command/skill files organized by type.
 
@@ -224,7 +420,7 @@ Sections:
 
 ---
 
-## Scenario 3: Section Tree Navigation
+### Scenario 3: Section Tree Navigation
 
 **Use Case**: Navigate complex nested section hierarchies with XML tags.
 
@@ -390,7 +586,7 @@ echo "=== Workflow Complete ==="
 
 ---
 
-## Scenario 4: Component Handler - Plugin Management
+### Scenario 4: Component Handler - Plugin Management
 
 **Use Case**: Store and retrieve Claude Code plugins with progressive disclosure.
 
@@ -469,7 +665,7 @@ hooks
 
 ---
 
-## Scenario 5: Component Handler - Configuration Search
+### Scenario 5: Component Handler - Configuration Search
 
 **Use Case**: Search across configuration files to find specific settings.
 
@@ -524,7 +720,7 @@ Content:
 
 ---
 
-## Scenario 6: Component Handler - Hook Inspection
+### Scenario 6: Component Handler - Hook Inspection
 
 **Use Case**: Inspect hook definitions and scripts without loading entire plugin.
 
