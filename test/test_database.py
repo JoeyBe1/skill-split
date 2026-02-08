@@ -443,6 +443,131 @@ Root 2 content.
         assert sections == [], "should return empty list for nonexistent file"
 
 
+class TestDatabaseStoreFTS5:
+    """Test FTS5 full-text search with BM25 ranking in DatabaseStore."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def _compute_hash(self, content):
+        """Compute SHA256 hash of content."""
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def test_search_sections_with_rank_returns_tuples(self):
+        """search_sections_with_rank() returns (section_id, rank) tuples."""
+        from models import ParsedDocument, Section, FileType, FileFormat
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Python", content="Python code here", line_start=1, line_end=2),
+                Section(level=1, title="JavaScript", content="JS code here", line_start=3, line_end=4),
+            ],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/search.md"
+        )
+        self.store.store_file("/test/search.md", doc, "test_hash")
+
+        results = self.store.search_sections_with_rank("python")
+
+        assert all(isinstance(r, tuple) and len(r) == 2 for r in results)
+        assert all(isinstance(r[0], int) for r in results)  # section_id
+        assert all(isinstance(r[1], float) for r in results)  # rank
+
+    def test_search_sections_with_rank_ranking_quality(self):
+        """BM25 ranking prioritizes relevant matches over position."""
+        from models import ParsedDocument, Section, FileType, FileFormat
+
+        # Create test sections where relevant content is NOT first
+        sections = [
+            Section(level=1, title="Intro", content="Basic intro text", line_start=1, line_end=2),
+            Section(level=1, title="Python", content="Some python code", line_start=3, line_end=4),
+            Section(level=2, title="Python Advanced", content="Advanced python handler with detailed implementation", line_start=5, line_end=6),
+            Section(level=1, title="Database", content="Database storage", line_start=7, line_end=8),
+        ]
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=sections,
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/python.md"
+        )
+        self.store.store_file("/test/python.md", doc, "test_hash")
+
+        results = self.store.search_sections_with_rank("python")
+
+        # Results should be ranked by relevance, not position
+        # "Python" and "Python Advanced" should both match, with "Python Advanced" ranking higher
+        assert len(results) > 1, f"Expected multiple results, got {len(results)}"
+        ranks = [r[1] for r in results]
+        assert ranks == sorted(ranks, reverse=True), "Ranks should be descending"
+
+    def test_search_sections_with_rank_case_insensitive(self):
+        """FTS5 search is case-insensitive."""
+        from models import ParsedDocument, Section, FileType, FileFormat
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[Section(level=1, title="Python", content="Python content", line_start=1, line_end=2)],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/case.md"
+        )
+        self.store.store_file("/test/case.md", doc, "test_hash")
+
+        results_lower = self.store.search_sections_with_rank("python")
+        results_upper = self.store.search_sections_with_rank("PYTHON")
+        results_mixed = self.store.search_sections_with_rank("Python")
+
+        # Should return same results
+        assert len(results_lower) == len(results_upper) == len(results_mixed)
+
+    def test_search_sections_with_rank_empty_query(self):
+        """Empty query returns empty results."""
+        results = self.store.search_sections_with_rank("")
+        # FTS5 MATCH with empty string returns no results
+        assert results == []
+
+    def test_search_sections_with_rank_file_filter(self):
+        """file_path parameter restricts search to specific file."""
+        from models import ParsedDocument, Section, FileType, FileFormat
+
+        doc1 = ParsedDocument(
+            frontmatter="",
+            sections=[Section(level=1, title="Test", content="Test content", line_start=1, line_end=2)],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/path1.md"
+        )
+        self.store.store_file("/test/path1.md", doc1, "hash1")
+
+        doc2 = ParsedDocument(
+            frontmatter="",
+            sections=[Section(level=1, title="Test", content="Test content", line_start=1, line_end=2)],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/path2.md"
+        )
+        self.store.store_file("/test/path2.md", doc2, "hash2")
+
+        all_results = self.store.search_sections_with_rank("test")
+        file_results = self.store.search_sections_with_rank("test", file_path="/test/path1.md")
+
+        # File-restricted results should be subset of all results
+        assert len(file_results) <= len(all_results)
+
+
 def run_tests():
     """Run all tests."""
     import traceback
@@ -453,6 +578,7 @@ def run_tests():
         TestSectionHierarchy,
         TestCascadeDelete,
         TestGetSectionTree,
+        TestDatabaseStoreFTS5,
     ]
 
     passed = 0

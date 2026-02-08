@@ -605,6 +605,10 @@ class DatabaseStore:
             List of (section_id, rank) tuples where rank is negative BM25 score
             (higher values = more relevant, so we negate for compatibility)
         """
+        # Handle empty query - FTS5 MATCH fails with empty string
+        if not query or not query.strip():
+            return []
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
 
