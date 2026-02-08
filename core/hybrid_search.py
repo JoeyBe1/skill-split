@@ -164,29 +164,42 @@ class HybridSearch:
         limit: int = 10
     ) -> List[Tuple[int, float]]:
         """
-        Search sections using text-based matching.
+        Search sections using FTS5 full-text search with BM25 ranking.
 
-        Uses the QueryAPI search_sections method which performs
-        substring and relevance matching.
+        Uses QueryAPI search_sections_with_rank which delegates to
+        DatabaseStore for proper FTS5 BM25 relevance ranking.
 
         Args:
             query: Search query string
             limit: Maximum results to return
 
         Returns:
-            List of (section_id, relevance_score) tuples
+            List of (section_id, relevance_score) tuples where higher = more relevant
         """
         try:
-            # Use QueryAPI search_sections
-            results = self.query_api.search_sections(query)
+            # Use QueryAPI's FTS5 ranked search (delegates to DatabaseStore)
+            results = self.query_api.search_sections_with_rank(query)
 
-            # Convert to list of (section_id, score) tuples
-            # For text search, we assign scores based on position (first = higher)
-            scored_results = []
-            for i, section_id in enumerate(results[:limit]):
-                # Score decreases with position
-                score = max(0.0, 1.0 - (i / limit))
-                scored_results.append((section_id, score))
+            # Normalize scores to [0, 1] for hybrid combination
+            if not results:
+                return []
+
+            # Extract ranks (already negated in DatabaseStore so higher = better)
+            section_ids, ranks = zip(*results)
+            min_rank = min(ranks)
+            max_rank = max(ranks)
+
+            # Normalize to [0, 1]
+            if max_rank == min_rank:
+                normalized_scores = [0.5] * len(ranks)
+            else:
+                normalized_scores = [
+                    (r - min_rank) / (max_rank - min_rank)
+                    for r in ranks
+                ]
+
+            # Return top N results with normalized scores
+            scored_results = list(zip(section_ids, normalized_scores))[:limit]
 
             self.metrics["text_searches"] += 1
             return scored_results

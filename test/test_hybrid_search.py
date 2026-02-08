@@ -169,13 +169,13 @@ class TestTextSearch:
         query_api = Mock()
         supabase_store = Mock()
 
-        # Mock query_api.search_sections
-        query_api.search_sections.return_value = [5, 10, 15]
+        # Mock query_api.search_sections_with_rank with (id, rank) tuples
+        query_api.search_sections_with_rank.return_value = [(5, 2.5), (10, 1.8), (15, 0.9)]
 
         hybrid = HybridSearch(embedding_service, supabase_store, query_api)
         results = hybrid.text_search("test query", limit=10)
 
-        # Results should be scored (earlier = higher score)
+        # Results should be scored (higher rank = higher score)
         assert len(results) == 3
         assert results[0][0] == 5  # First result
         assert results[0][1] > results[1][1]  # Scores decrease
@@ -188,7 +188,7 @@ class TestTextSearch:
         query_api = Mock()
         supabase_store = Mock()
 
-        query_api.search_sections.return_value = [1, 2, 3, 4, 5]
+        query_api.search_sections_with_rank.return_value = [(1, 3.0), (2, 2.0), (3, 1.0), (4, 0.5), (5, 0.2)]
 
         hybrid = HybridSearch(embedding_service, supabase_store, query_api)
         results = hybrid.text_search("query", limit=3)
@@ -218,7 +218,7 @@ class TestHybridSearch:
         supabase_store.client.rpc.return_value.execute.return_value = vector_mock
 
         # Mock text search results
-        query_api.search_sections.return_value = [2, 3, 4]
+        query_api.search_sections_with_rank.return_value = [(2, 2.0), (3, 1.5), (4, 1.0)]
 
         hybrid = HybridSearch(embedding_service, supabase_store, query_api)
         results = hybrid.hybrid_search("test query", limit=3, vector_weight=0.7)
@@ -254,7 +254,7 @@ class TestHybridSearch:
         vector_mock.data = [{'section_id': 1, 'similarity': 0.9}]
         supabase_store.client.rpc.return_value.execute.return_value = vector_mock
 
-        query_api.search_sections.return_value = [2, 3]
+        query_api.search_sections_with_rank.return_value = [(2, 2.0), (3, 1.0)]
 
         hybrid = HybridSearch(embedding_service, supabase_store, query_api)
         hybrid.hybrid_search("test")
@@ -275,7 +275,7 @@ class TestHybridSearch:
         vector_mock.data = [{'section_id': 1, 'similarity': 0.9}]
         supabase_store.client.rpc.return_value.execute.return_value = vector_mock
 
-        query_api.search_sections.return_value = [1, 2]
+        query_api.search_sections_with_rank.return_value = [(1, 2.5), (2, 1.5)]
 
         hybrid = HybridSearch(embedding_service, supabase_store, query_api)
 

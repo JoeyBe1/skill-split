@@ -173,21 +173,20 @@ class TestHybridSearch:
 
     def test_text_search_success(self):
         """Text search returns scored results."""
-        self.query_api.search_sections.return_value = [5, 10, 15]
+        self.query_api.search_sections_with_rank.return_value = [(5, 2.5), (10, 1.5), (15, 0.5)]
 
         results = self.hybrid_search.text_search("authentication", limit=3)
 
         assert len(results) == 3
         assert results[0][0] == 5  # section_id
-        assert results[0][1] == pytest.approx(1.0)  # highest score
+        assert results[0][1] == pytest.approx(1.0)  # highest score (normalized)
         assert results[2][0] == 15  # section_id
-        # Score for third item: max(0.0, 1.0 - (2 / 3)) = 0.333...
-        assert results[2][1] == pytest.approx(1.0 - (2.0 / 3.0))  # lowest score
+        assert results[2][1] == pytest.approx(0.0)  # lowest score (normalized)
         assert self.hybrid_search.metrics["text_searches"] == 1
 
     def test_text_search_empty_results(self):
         """Text search handles no results."""
-        self.query_api.search_sections.return_value = []
+        self.query_api.search_sections_with_rank.return_value = []
 
         results = self.hybrid_search.text_search("nonexistent")
 
@@ -195,7 +194,7 @@ class TestHybridSearch:
 
     def test_text_search_error_handling(self):
         """Text search raises RuntimeError on failure."""
-        self.query_api.search_sections.side_effect = Exception("Search error")
+        self.query_api.search_sections_with_rank.side_effect = Exception("Search error")
 
         with pytest.raises(RuntimeError, match="Text search failed"):
             self.hybrid_search.text_search("query")
@@ -222,7 +221,7 @@ class TestHybridSearch:
         )
 
         # Mock text search
-        self.query_api.search_sections.return_value = [2, 3]
+        self.query_api.search_sections_with_rank.return_value = [(2, 2.0), (3, 1.0)]
 
         results = self.hybrid_search.hybrid_search("test query")
 
@@ -239,7 +238,7 @@ class TestHybridSearch:
         # Mock responses
         self.embedding_service.generate_embedding.return_value = [0.1] * 1536
         self.supabase_store.client.rpc.return_value.execute.return_value = MagicMock(data=[])
-        self.query_api.search_sections.return_value = []
+        self.query_api.search_sections_with_rank.return_value = []
 
         self.hybrid_search.hybrid_search("test")
 
@@ -255,7 +254,7 @@ class TestHybridSearch:
         self.supabase_store.client.rpc.return_value.execute.return_value = MagicMock(
             data=[{"section_id": 1, "similarity": 1.0}]
         )
-        self.query_api.search_sections.return_value = [2]
+        self.query_api.search_sections_with_rank.return_value = [(2, 2.0)]
 
         # Test with different weights
         results_high = self.hybrid_search.hybrid_search("test", vector_weight=0.9)
@@ -303,7 +302,7 @@ class TestHybridSearch:
         # Run a search to generate metrics
         self.embedding_service.generate_embedding.return_value = [0.1] * 1536
         self.supabase_store.client.rpc.return_value.execute.return_value = MagicMock(data=[])
-        self.query_api.search_sections.return_value = []
+        self.query_api.search_sections_with_rank.return_value = []
 
         self.hybrid_search.hybrid_search("test")
 
