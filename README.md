@@ -148,7 +148,28 @@ Check if a file can be parsed correctly:
 
 Returns exit code 0 if valid, non-zero if problems found.
 
-### 6. Verify Round-Trip Integrity
+### 6. Search Sections
+
+Search across all stored files using FTS5 full-text search:
+
+```bash
+./skill_split.py search "python handler"
+```
+
+Output:
+```
+Found 3 section(s) matching 'python handler':
+
+ID      Score   File                                   Title
+-------- -------- -------------------------------------- --------
+42      3.52    /skills/programming/SKILL.md           Python Handler
+15      2.18    /docs/advanced/TECHNIQUES.md           Advanced Python
+8       1.05    /setup/INSTALL.md                      Setup Python
+```
+
+Multi-word queries use OR search for broader discovery (finds sections with ANY word).
+
+### 7. Verify Round-Trip Integrity
 
 Confirm that parsing and recomposition produce an exact byte match:
 
@@ -296,6 +317,140 @@ Output:
 ```bash
 ./skill_split.py verify README.md
 ```
+
+---
+
+### Search Command
+
+```bash
+./skill_split.py search <query> [--file <path>] [--db <path>]
+```
+
+**Description**: Search section content using FTS5 full-text search with BM25 relevance ranking. Multi-word queries use OR search for better discovery.
+
+**Arguments**:
+- `query`: Search string (natural language or FTS5 MATCH syntax)
+- `--file`: (Optional) Limit search to specific file
+- `--db`: (Optional) Path to database (default: skill_split.db)
+
+**Output**: Ranked results with relevance scores (higher = more relevant)
+
+**Examples**:
+```bash
+# Multi-word search uses OR (finds sections with either word)
+./skill_split.py search "git setup"
+
+# Exact phrase search (use quotes)
+./skill_split.py search '"git repository"'
+
+# AND search (both words required)
+./skill_split.py search "git AND repository"
+
+# Search within specific file
+./skill_split.py search "python" --file /skills/programming/SKILL.md
+
+# Use custom database
+./skill_split.py search "authentication" --db ~/.claude/databases/skill-split.db
+```
+
+**Query Processing**: Natural language queries are automatically converted to optimal FTS5 syntax. See [Search Syntax](#search-syntax) for details.
+
+---
+
+## Search Syntax
+
+skill-split uses SQLite FTS5 full-text search with intelligent query processing.
+
+### Basic Search
+
+**Single word:** Finds exact matches
+```bash
+./skill_split.py search "python"
+```
+
+**Multi-word:** Finds sections with ANY word (OR search for discovery)
+```bash
+./skill_split.py search "git setup"
+# Finds sections about git OR setup (broader discovery)
+```
+
+### Advanced Syntax
+
+**Exact phrase:** Use quotes for phrase matching
+```bash
+./skill_split.py search '"git repository"'
+# Finds exact phrase "git repository"
+```
+
+**AND search:** Both words required
+```bash
+./skill_split.py search "git AND repository"
+# Finds sections with BOTH git AND repository
+```
+
+**OR search:** Either word required (explicit)
+```bash
+./skill_split.py search "git OR repository"
+# Finds sections with git OR repository
+```
+
+**NEAR search:** Words within proximity
+```bash
+./skill_split.py search "git NEAR repository"
+# Finds "git" near "repository" in text
+```
+
+**Complex queries:** Combine operators
+```bash
+./skill_split.py search '"python handler" OR config'
+# Finds exact phrase "python handler" OR sections about config
+```
+
+### How Queries Are Processed
+
+1. **Empty/whitespace:** Returns no results
+2. **User operators (AND/OR/NEAR):** Used as-is (you know FTS5 syntax)
+3. **Quoted phrases:** Exact phrase match
+4. **Single word:** Direct match
+5. **Multi-word unquoted:** Converts to OR for discovery
+
+**Example conversions:**
+- `"python"` → `"python"` (quoted phrase)
+- `python` → `python` (single word)
+- `python handler` → `"python" OR "handler"` (multi-word → OR)
+- `python AND handler` → `python AND handler` (user operator)
+- `"python handler" OR config` → `"python handler" OR config` (complex)
+
+### Relevance Scores
+
+Search results include BM25 relevance scores (higher = more relevant):
+
+```bash
+$ ./skill_split.py search "python"
+Found 3 section(s) matching 'python':
+
+ID      Score   Title                                 Level
+-------- -------- ---------------------------------------- ------
+42      3.52    Python Handler                        1
+15      2.18    Advanced Python Techniques            2
+8       1.05    Setup Python Environment              1
+```
+
+### File-Specific Search
+
+Search within a specific file:
+
+```bash
+./skill_split.py search "python" --file /skills/programming/SKILL.md
+```
+
+### Tips
+
+- Use quotes for exact phrases: `"exact words here"`
+- Use OR for broader discovery: `term1 OR term2`
+- Use AND for narrower results: `term1 AND term2`
+- Multi-word without quotes defaults to OR (better discovery)
+- Relevance scores help identify most relevant results
 
 ---
 
@@ -551,7 +706,7 @@ pytest -v
 ### Test Coverage
 
 - **Parser Tests** (21 tests): YAML, Markdown headings, XML tags, nested sections
-- **Database Tests** (7 tests): Storage, retrieval, cascade delete
+- **Database Tests** (85 tests): Storage, retrieval, cascade delete, FTS5 search, query preprocessing
 - **Hashing Tests** (5 tests): Round-trip verification
 - **Round-Trip Tests** (8 tests): Full parse → store → recompose cycle
 - **Query Tests** (18 tests): Progressive disclosure API
@@ -559,10 +714,15 @@ pytest -v
 - **Supabase Tests** (5 tests): Remote storage integration
 - **Checkout Tests** (5 tests): File deployment workflow
 - **Component Handler Tests** (48 tests): Plugin, Hook, Config handlers
+- **Hybrid Search Tests** (80 tests): FTS5, vector search, hybrid ranking
+- **Embedding Service Tests** (15 tests): Vector generation and similarity
+- **Composer Tests** (25 tests): Skill composition and validation
+- **Frontmatter Tests** (12 tests): Auto-generation of skill frontmatter
+- **Other Tests** (215 tests): Integration, cross-component, utilities
 
 ### Current Test Count
 
-**125 tests passing** (Phases 1-9 complete, 5 Supabase tests skipped without env vars)
+**518 tests passing** (Phases 1-11 complete, including query preprocessing and FTS5 search)
 
 ### Example Test Run
 
@@ -662,6 +822,7 @@ MIT
 
 ---
 
-**Last Updated**: 2026-02-04
-**Status**: Phases 1-9 Complete (123 tests passing)
-**Next**: Phase 10 - Advanced Component Types (Agents, Output Styles)
+**Last Updated**: 2026-02-08
+**Status**: Phases 1-11 Complete (518 tests passing)
+**Supabase**: 2,757 files in archival mode
+**Next**: Phase 02 - Search Fix (Query preprocessing and documentation)
