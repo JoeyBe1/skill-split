@@ -538,6 +538,8 @@ Navigate to first child subsection:
 
 **Token Savings:** Instead of loading entire 50-section skill (21KB), load just one section (204 bytes) - **99% context savings**.
 
+For detailed search and navigation examples, see [EXAMPLES.md](EXAMPLES.md).
+
 ---
 
 ## Supabase Integration

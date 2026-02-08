@@ -812,6 +812,7 @@ npm test
 ## Next Steps
 
 - See [README.md](./README.md) for installation and setup
+- See [docs/CLI_REFERENCE.md](./docs/CLI_REFERENCE.md) for complete CLI command reference
 - See [CLAUDE.md](./CLAUDE.md) for project context
 - See [COMPONENT_HANDLERS.md](./COMPONENT_HANDLERS.md) for complete component handler guide
 - See [HANDLER_INTEGRATION.md](./HANDLER_INTEGRATION.md) for integration details
