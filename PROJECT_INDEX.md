@@ -1,7 +1,7 @@
 # Project Index: skill-split
 
-**Generated**: 2026-02-08
-**Purpose**: Token-efficient codebase navigation (94% reduction vs full file read)
+**Generated**: 2026-02-08 11:52 AM
+**Purpose**: Token-efficient codebase overview (3KB vs 58KB = 94% savings)
 
 ---
 
@@ -9,246 +9,152 @@
 
 ```
 skill-split/
-├── core/                    # Core parsing, storage, query modules
-│   ├── parser.py            # Markdown/XML parsing with frontmatter
-│   ├── database.py          # SQLite storage with CASCADE delete
-│   ├── supabase_store.py    # Supabase client with vector search
-│   ├── query.py             # Progressive disclosure API
-│   ├── hybrid_search.py     # Vector + text search
-│   ├── embedding_service.py # OpenAI embeddings with caching
-│   ├── skill_composer.py    # Assemble skills from sections
-│   ├── checkout_manager.py  # File deployment & checkout/checkin
-│   └── [other modules...]
-├── handlers/                # File-type specific handlers
-│   ├── base.py              # Abstract BaseHandler
-│   ├── factory.py           # HandlerFactory for type dispatch
-│   ├── plugin_handler.py    # Plugin component parsing
-│   ├── hook_handler.py      # Hook component parsing
-│   ├── config_handler.py    # Settings/MCP config parsing
-│   ├── python_handler.py    # Python file parsing
-│   ├── javascript_handler.py # JS/JSX parsing
-│   ├── typescript_handler.py # TS/TSX parsing
-│   └── shell_handler.py     # Shell script parsing
-├── test/                    # 499 tests, comprehensive coverage
-│   ├── test_parser.py
-│   ├── test_database.py
-│   ├── test_handlers/
-│   └── fixtures/
-├── migrations/              # Database schema migrations
-│   ├── enable_pgvector.sql
-│   ├── create_embeddings_table.sql
-│   └── optimize_vector_search.sql
-├── scripts/                 # Utilities (embedding generation, monitoring)
-├── demo/                    # Example usage scripts
-└── skill_split.py           # Main CLI entry point (16 commands)
+├── core/              # Core parsing and storage (16 modules)
+├── handlers/          # File type handlers (12 modules)
+├── test/              # Test suite (21 test files)
+├── demo/              # Demo scripts and examples
+├── scripts/           # Utility scripts (embeddings, monitoring)
+├── migrations/        # Database migrations (SQL)
+├── .planning/         # GSD project management
+├── .archive/          # Historical documents
+└── docs/              # Additional documentation
 ```
 
 ---
 
 ## 🚀 Entry Points
 
-**CLI**: `skill_split.py` - Main CLI with 16 commands
-- Commands: parse, validate, store, verify, get-section, search, search-semantic, compose, checkout, checkin, list-library, status, ingest, batch-ingest
-- Usage: `./skill_split.py <command> [args]`
-
-**API**: `core/query.py` - QueryAPI for progressive disclosure
-- Methods: `get_section()`, `get_next_section()`, `search_sections()`, `get_section_tree()`
-- Usage: Import for programmatic access
-
-**Tests**: `pytest test/` - 499 tests passing
-- Framework: pytest 9.0.2
-- Coverage: All core modules, handlers, integration tests
+| Entry Point | Path | Purpose |
+|-------------|------|---------|
+| **CLI** | `skill_split.py` | Main CLI with 16 commands (parse, store, search, compose, etc.) |
+| **Models** | `models.py` | Data classes: Section, FileMetadata, FileFormat, FileType |
+| **Database Schema** | `schema.sql` | SQLite schema with CASCADE delete |
 
 ---
 
-## 📦 Core Modules
+## 📦 Core Modules (16)
 
-### Module: Parser (`core/parser.py`)
-- **Purpose**: Parse markdown/XML with frontmatter, headings, tags
-- **Key Classes**: `Parser`, `FormatDetector`
-- **Exports**: `parse_headings()`, `parse_xml_tags()`, `detect_format()`
+### Parsing Pipeline
+- `parser.py` - Extracts YAML frontmatter, markdown headings, XML tags
+- `detector.py` - Detects file format (markdown, XML, mixed)
+- `recomposer.py` - Byte-perfect round-trip reconstruction
+- `validator.py` - Structure and round-trip integrity validation
+- `hashing.py` - SHA256 integrity verification
 
-### Module: Database (`core/database.py`)
-- **Purpose**: SQLite storage with CASCADE delete, hierarchical queries
-- **Key Classes**: `DatabaseStore`
-- **Exports**: `store_file()`, `get_file()`, `get_section()`, `search_sections()`
+### Storage & Query
+- `database.py` - SQLite operations with CASCADE delete
+- `query.py` - Query API for progressive disclosure
+- `query_interface.py` - Unified query interface
 
-### Module: Supabase Store (`core/supabase_store.py`)
-- **Purpose**: Supabase client with vector search, checkout tracking
-- **Key Classes**: `SupabaseStore`
-- **Exports**: Remote storage, vector similarity search, checkout status
+### Remote & Deployment
+- `supabase_store.py` - Supabase cloud storage
+- `checkout_manager.py` - File deployment and checkout/checkin
 
-### Module: Query API (`core/query.py`)
-- **Purpose**: Progressive disclosure interface
-- **Key Classes**: `QueryAPI`
-- **Exports**: Section-by-section retrieval, navigation, search
+### Advanced Features
+- `hybrid_search.py` - BM25 + vector search combination
+- `embedding_service.py` - OpenAI embeddings for semantic search
+- `skill_composer.py` - Assemble new skills from sections
+- `skill_validator.py` - Validate composed skills
+- `frontmatter_generator.py` - Auto-generate YAML frontmatter
 
-### Module: Hybrid Search (`core/hybrid_search.py`)
-- **Purpose**: Vector + text search with adjustable weighting
-- **Key Classes**: `HybridSearch`
-- **Exports**: `hybrid_search()`, `vector_search()`, `text_search()`
+---
 
-### Module: Embedding Service (`core/embedding_service.py`)
-- **Purpose**: OpenAI embeddings with caching and batch generation
-- **Key Classes**: `EmbeddingService`
-- **Exports**: `generate_embedding()`, batch embeddings
+## 🔧 Handlers (12)
 
-### Module: Skill Composer (`core/skill_composer.py`)
-- **Purpose**: Assemble new skills from existing sections
-- **Key Classes**: `SkillComposer`
-- **Exports**: `compose_from_sections()`, rebuild hierarchy
+### Base & Factory
+- `base.py` - Abstract base class for handlers
+- `factory.py` - Factory pattern for handler creation
 
-### Module: Checkout Manager (`core/checkout_manager.py`)
-- **Purpose**: File deployment with multi-file support
-- **Key Classes**: `CheckoutManager`
-- **Exports**: `checkout_file()`, `checkin_file()`, multi-file deployment
+### Detection
+- `component_detector.py` - Component type detection
+
+### Component Handlers (Phase 9)
+- `plugin_handler.py` - Parse plugin.json with MCP config
+- `hook_handler.py` - Parse hooks.json with shell scripts
+- `config_handler.py` - Parse settings.json and mcp_config.json
+
+### Script Handlers (Phase 10)
+- `script_handler.py` - Base for script file parsing
+- `python_handler.py` - Python files (class/function/method)
+- `javascript_handler.py` - JavaScript/JSX files
+- `typescript_handler.py` - TypeScript/TSX files with interfaces
+- `shell_handler.py` - Shell script function blocks
+
+---
+
+## 🧪 Test Coverage (21 test files)
+
+| Category | Files |
+|----------|-------|
+| Core Tests | `test_parser.py`, `test_database.py`, `test_query.py`, `test_hashing.py` |
+| Handler Tests | `test_plugin_handler.py`, `test_hook_handler.py`, `test_config_handler.py`, `test_script_handlers.py` |
+| Integration Tests | `test_cli.py`, `test_supabase_store.py`, `test_checkout_manager.py` |
+| Advanced Tests | `test_embedding_service.py`, `test_hybrid_search.py`, `test_vector_search.py` |
+| Composition Tests | `test_skill_composer.py`, `test_skill_validator.py`, `test_composer_integration.py` |
+
+**Current**: 485/485 tests passing
+
+---
+
+## 📚 Key Documentation
+
+| File | Purpose |
+|------|---------|
+| `README.md` | Complete documentation |
+| `CLAUDE.md` | Project context for Claude Code |
+| `EXAMPLES.md` | Usage scenarios |
+| `COMPONENT_HANDLERS.md` | Handler guide |
+| `DEPLOYMENT_STATUS.md` | Production capabilities |
+| `VECTOR_SEARCH_GUIDE.md` | Semantic search |
 
 ---
 
 ## 🔧 Configuration
 
-**Environment**: `.env` or environment variables
-- `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_KEY`: Supabase anon/service_role key
-- `OPENAI_API_KEY`: OpenAI API key for embeddings
-- `SKILL_SPLIT_DB`: Path to SQLite database (default: `skill_split.db`)
-
-**Dependencies**: `requirements.txt`
-- `supabase>=2.3.0`: Supabase Python client
-- `python-dotenv>=1.0.0`: Environment variable loading
-
-**Testing**: `pytest` + plugins
-- `pytest-asyncio`: Async test support
-- `pytest-benchmark`: Performance testing
-- `pytest-mock`: Mocking utilities
-- `pytest-cov`: Coverage reporting
-- `pyfakefs`: Filesystem mocking
-- `respx`: HTTP mocking
-
----
-
-## 📚 Documentation
-
-**Quick Start**:
-- `README.md` - Project overview and installation
-- `CLAUDE.md` - Project context for Claude Code agents
-- `EXAMPLES.md` - Usage scenarios (progressive disclosure, search)
-- `VECTOR_SEARCH_GUIDE.md` - Vector search implementation guide
-
-**Architecture**:
-- `COMPONENT_HANDLERS.md` - Handler system documentation
-- `HANDLER_INTEGRATION.md` - Integration guide
-- `COMPONENT_COMPOSITION.md` - Skill composition reference
-
-**Planning**:
-- `.planning/codebase/` - Codebase analysis (7 documents, 1,433 lines)
-- `docs/plans/` - Phase plans and summaries
-
----
-
-## 🧪 Test Coverage
-
-**Test Count**: 499 tests passing (as of 2026-02-08)
-
-**Unit Tests**:
-- `test/test_parser.py` - Parser tests for markdown, XML, mixed formats
-- `test/test_database.py` - DatabaseStore CRUD and cascade tests
-- `test/test_handlers/` - Handler-specific tests with fixtures
-- `test/test_skill_composer.py` - Composition logic tests
-- `test/test_hybrid_search.py` - Vector search tests
-- `test/test_embedding_service.py` - Embedding generation tests
-
-**Integration Tests**:
-- `test/test_supabase_store.py` - Supabase integration
-- `test/test_composer_integration.py` - End-to-end composition
-- `test/test_vector_search_integration.py` - Vector search integration
-
-**Round-trip Tests**:
-- `test/test_roundtrip.py` - Byte-perfect round-trip verification
-- `demo/test_roundtrip_examples.sh` - Real-world round-trip testing
+| File | Purpose |
+|------|---------|
+| `.env` | Environment variables (Supabase URL, keys) |
+| `requirements.txt` | Python dependencies |
+| `.planning/config.json` | GSD workflow config |
+| `.claude.json` | Claude Code project config |
 
 ---
 
 ## 🔗 Key Dependencies
 
-**Runtime**:
-- `supabase>=2.3.0` - Supabase client (PostgreSQL, storage, auth)
-- `python-dotenv>=1.0.0` - Environment configuration
-
-**Development**:
-- `pytest>=9.0.2` - Test framework
-- `pytest-asyncio` - Async test support
-- `pytest-benchmark` - Performance testing
-- `pytest-mock` - Mocking
-- `pytest-cov` - Coverage
-- `pyfakefs` - Filesystem mocking
-- `respx` - HTTP mocking
-
-**Optional** (for vector search):
-- `openai>=1.0.0` - OpenAI API for embeddings
+- `supabase>=2.3.0` - Cloud storage
+- `python-dotenv>=1.0.0` - Environment management
+- `pytest` - Testing framework
+- `pytest-cov` - Coverage reporting
 
 ---
 
 ## 📝 Quick Start
 
-**1. Parse and store a file:**
 ```bash
-./skill_split.py parse skill.md
-./skill_split.py store skill.md
-```
+# Parse and display structure
+./skill_split.py parse <file>
 
-**2. Retrieve specific section:**
-```bash
-./skill_split.py get-section <section_id> --db skill_split.db
-```
+# Store in database
+./skill_split.py store <file>
 
-**3. Search sections:**
-```bash
-./skill_split.py search "authentication" --db skill_split.db
-```
+# Search sections
+./skill_split.py search "query" --db skill_split.db
 
-**4. Compose new skill:**
-```bash
+# Compose new skill
 ./skill_split.py compose --sections 1,2,3 --output new_skill.md
 ```
 
-**5. Deploy from library:**
-```bash
-./skill_split.py checkout <file_id> --target ~/.claude/skills/new/SKILL.md
-```
+---
 
-**6. Run tests:**
-```bash
-python -m pytest test/ -v
-```
+## 🎯 Current Status
+
+- **Phase**: 02-search_fix (Planning Complete, Ready to Execute)
+- **Tests**: 485/485 passing
+- **Database**: 1,365 files, 19,207 sections (production)
+- **Deployment**: Single-file checkout, multi-file plugins/hooks
 
 ---
 
-## 🎯 Production Status
-
-**Phase 1-11 Complete** (2026-02-06)
-- ✅ 499/499 tests passing
-- ✅ Single-file checkout (skills, commands, scripts)
-- ✅ Multi-file checkout (plugins, hooks with related files)
-- ✅ Vector search (semantic + hybrid ranking)
-- ✅ Skill composition (absolute line number tracking)
-
-**Deployment Ready**:
-- Local: `~/.claude/databases/skill-split.db` (1,365 files, 19,207 sections)
-- Remote: Supabase cloud storage fully functional
-
----
-
-## 🔍 Token Efficiency
-
-**Index Size**: ~3KB (this file)
-**Full Codebase Read**: ~58,000 tokens
-**Savings**: 94% token reduction per session
-
-**Break-even**: 1 session
-**10 sessions savings**: 550,000 tokens
-**100 sessions savings**: 5,500,000 tokens
-
----
-
-*Generated by /sc:index-repo skill-split 2026-02-08*
+*Auto-generated by sc:index-repo skill*
+*Update with: `/sc:index-repo mode=update`*
