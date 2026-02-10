@@ -17,7 +17,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup ✓ (2026-02-08)
 - [x] **Phase 4: Transaction Safety** - Add atomic multi-file checkout operations ✓ (2026-02-09)
 - [x] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery ✓ (2026-02-10)
-- [ ] **Phase 6: API Key Security** - Remove API keys from environment variables
+- [x] **Phase 6: API Key Security** - Remove API keys from environment variables ✓ (2026-02-10)
+- [x] **Phase 7: Documentation Gaps** - Close documentation gaps for backup/restore and phase status ✓ (2026-02-10)
 
 ## Phase Details
 
@@ -141,9 +142,28 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md - Create SecretManager abstraction with file, keyring, and environment sources
-- [ ] 06-02-PLAN.md - Update EmbeddingService to use SecretManager with backward compatibility
-- [ ] 06-03-PLAN.md - Update SupabaseStore and CLI to use SecretManager
+- [x] 06-01-PLAN.md - Create SecretManager abstraction with file, keyring, and environment sources ✓
+- [x] 06-02-PLAN.md - Update EmbeddingService to use SecretManager with backward compatibility ✓
+- [x] 06-03-PLAN.md - Update SupabaseStore and CLI to use SecretManager ✓
+
+### Phase 7: Documentation Gaps
+
+**Goal**: Close all remaining documentation gaps identified by verification team
+
+**Depends on**: Phases 1-6 (all features complete)
+
+**Success Criteria** (what must be TRUE):
+1. README.md documents backup and restore commands with usage examples
+2. EXAMPLES.md includes backup/restore workflow examples and disaster recovery scenarios
+3. docs/plans/README.md includes all completed phases in status table
+4. All documentation reflects current project state (623 tests passing)
+
+**Plans**: 3 plans
+
+Plans:
+- [x] 07-01-PLAN.md - Update README.md with backup/restore command documentation ✓
+- [x] 07-02-PLAN.md - Add backup/restore examples to EXAMPLES.md ✓
+- [x] 07-03-PLAN.md - Update docs/plans/README.md with complete phase status ✓
 
 ## Requirements Traceability
 
@@ -153,8 +173,8 @@ Plans:
 | GS-02 | Phase 3 | Complete |
 | GS-03 | Phase 4 | Complete |
 | GS-04 | Phase 5 | Complete |
-| GS-05 | Phase 6 | Planned |
+| GS-05 | Phase 6 | Complete |
 
 ---
 *Roadmap created: 2026-02-08*
-*Last updated: 2026-02-10 (Phase 6 planned, 3 plans ready)*
+*Last updated: 2026-02-10 (Phase 7 complete - All 7 phases executed, 19 plans complete, 623 tests passing)*
