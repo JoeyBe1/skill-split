@@ -314,6 +314,43 @@ Output:
 
 ---
 
+### Backup Command
+
+```bash
+./skill_split.py backup [--output <path>] [--db <path>]
+```
+
+**Description**: Creates a timestamped, gzip-compressed SQLite dump of the database for disaster recovery.
+
+**Arguments**:
+- `--output`: (Optional) Custom filename for the backup (default: auto-generated timestamp)
+- `--db`: (Optional) Path to database (default: skill_split.db)
+
+**Output**: Full path to the created backup file
+
+**Examples**:
+```bash
+# Create backup with auto-generated filename
+./skill_split.py backup
+
+# Create backup with custom filename
+./skill_split.py backup --output my-backup
+
+# Backup specific database
+./skill_split.py backup --db ~/.claude/databases/skill-split.db
+
+# Create backup in specific location
+./skill_split.py backup --output production-backup --db ~/.claude/databases/skill-split.db
+```
+
+**Notes**:
+- Backups are stored in `~/.claude/backups/` by default
+- Backup files are gzip-compressed SQL dumps with `.sql.gz` extension
+- FTS5 virtual tables are handled properly during backup
+- Timestamp format: `skill-split-YYYYMMDD-HHMMSS.sql.gz`
+
+---
+
 ## Search & Navigation
 
 skill-split provides THREE search modes for different use cases, plus progressive disclosure navigation for token-efficient content access.
