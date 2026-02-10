@@ -138,12 +138,12 @@ Plans:
 3. SupabaseStore retrieves service key from configured secret manager
 4. Secret manager integration includes fallback to environment variables for local development
 
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: Add secret manager integration (HashiCorp Vault or AWS Secrets Manager)
-- [ ] 06-02: Add fallback to environment variables for local development
-- [ ] 06-03: Update tests to support secret manager mocking
+- [ ] 06-01-PLAN.md - Create SecretManager abstraction with file, keyring, and environment sources
+- [ ] 06-02-PLAN.md - Update EmbeddingService to use SecretManager with backward compatibility
+- [ ] 06-03-PLAN.md - Update SupabaseStore and CLI to use SecretManager
 
 ## Requirements Traceability
 
@@ -157,4 +157,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-02-08*
-*Last updated: 2026-02-10 (Phase 5 complete, GS-04 satisfied)*
+*Last updated: 2026-02-10 (Phase 6 planned, 3 plans ready)*
