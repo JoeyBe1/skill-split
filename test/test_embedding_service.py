@@ -32,7 +32,7 @@ class TestEmbeddingServiceBasic:
         mock_openai.return_value = MagicMock()
 
         with patch.dict('os.environ', {}, clear=True):
-            with pytest.raises(ValueError, match="API key not provided"):
+            with pytest.raises(ValueError, match="API key not found"):
                 EmbeddingService()
 
     @patch('core.embedding_service.OpenAI')
@@ -589,3 +589,184 @@ class TestRateLimitHandling:
 
         with pytest.raises(RuntimeError, match="Failed to generate batch embedding"):
             service.batch_generate_with_retry(texts, max_retries=2)
+
+
+class TestSecretManagerIntegration:
+    """Test SecretManager integration with EmbeddingService."""
+
+    @patch('core.embedding_service.OpenAI')
+    def test_init_with_secret_manager(self, mock_openai):
+        """Test initialization with SecretManager parameter."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Mock SecretManager
+        from core.secret_manager import SecretSourceType
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.return_value = ("sk-secret-manager-key-123", SecretSourceType.FILE)
+
+        service = EmbeddingService(secret_manager=mock_sm)
+
+        assert service.api_key == "sk-secret-manager-key-123"
+        assert service.get_api_key_source() == "file"
+        mock_sm.get_secret_with_source.assert_called_once_with("OPENAI_API_KEY")
+
+    @patch('core.embedding_service.OpenAI')
+    def test_init_with_secret_manager_fallback_to_param(self, mock_openai):
+        """Test fallback to api_key parameter when SecretManager fails."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Mock SecretManager to raise exception
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = Exception("Secret not found")
+
+        service = EmbeddingService(api_key="sk-param-key-456", secret_manager=mock_sm)
+
+        assert service.api_key == "sk-param-key-456"
+        assert service.get_api_key_source() == "parameter"
+
+    @patch('core.embedding_service.OpenAI')
+    def test_init_with_secret_manager_fallback_to_env(self, mock_openai):
+        """Test fallback to environment when SecretManager fails and no param."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Mock SecretManager to raise exception
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = Exception("Secret not found")
+
+        import os
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key-789"}):
+            service = EmbeddingService(secret_manager=mock_sm)
+
+        assert service.api_key == "sk-env-key-789"
+        assert service.get_api_key_source() == "environment"
+
+    @patch('core.embedding_service.OpenAI')
+    @patch('core.embedding_service._ensure_secret_manager_imports')
+    def test_init_secret_manager_not_available(self, mock_ensure, mock_openai):
+        """Test graceful degradation when SecretManager unavailable."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Mock _ensure_secret_manager_imports to set SecretManager to None
+        def side_effect():
+            global SecretManager
+            SecretManager = None
+
+        mock_ensure.side_effect = side_effect
+
+        import os
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key-fallback"}):
+            service = EmbeddingService(use_secret_manager=True)
+
+        assert service.api_key == "sk-env-key-fallback"
+        assert service.get_api_key_source() == "environment"
+
+    @patch('core.embedding_service.OpenAI')
+    def test_init_use_secret_manager_false(self, mock_openai):
+        """Test use_secret_manager=False disables SecretManager."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.return_value = ("sk-secret-key", MagicMock(value="file"))
+
+        import os
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key-123"}):
+            service = EmbeddingService(
+                secret_manager=mock_sm,
+                use_secret_manager=False
+            )
+
+        # Should use environment, not SecretManager
+        assert service.api_key == "sk-env-key-123"
+        assert service.get_api_key_source() == "environment"
+        mock_sm.get_secret_with_source.assert_not_called()
+
+    @patch('core.embedding_service.OpenAI')
+    def test_init_all_sources_fail(self, mock_openai):
+        """Test ValueError when all sources fail."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = Exception("Secret not found")
+
+        import os
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ValueError, match="API key not found"):
+                EmbeddingService(secret_manager=mock_sm)
+
+    @patch('core.embedding_service.OpenAI')
+    def test_generate_embedding_uses_secret_manager_key(self, mock_openai):
+        """Test embedding generation uses SecretManager key."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Setup mock response
+        mock_embedding = [0.1] * 1536
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(embedding=mock_embedding)]
+        mock_response.usage = MagicMock(prompt_tokens=10)
+
+        mock_client.embeddings.create.return_value = mock_response
+
+        # Mock SecretManager
+        from core.secret_manager import SecretSourceType
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.return_value = ("sk-secret-for-generation", SecretSourceType.FILE)
+
+        service = EmbeddingService(secret_manager=mock_sm)
+
+        # Generate embedding
+        result = service.generate_embedding("test text")
+
+        assert result == mock_embedding
+        assert service.api_key == "sk-secret-for-generation"
+        assert service.get_api_key_source() == "file"
+
+    @patch('core.embedding_service.OpenAI')
+    def test_api_key_source_property(self, mock_openai):
+        """Test api_key_source property access."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Test with parameter
+        service1 = EmbeddingService(api_key="test-param")
+        assert service1.api_key_source == "parameter"
+
+        # Test with environment
+        import os
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-env"}):
+            service2 = EmbeddingService()
+            assert service2.api_key_source == "environment"
+
+    @patch('core.embedding_service.OpenAI')
+    def test_backward_compat_with_api_key_param(self, mock_openai):
+        """Test backward compatibility with api_key parameter."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        # Old way: just pass api_key
+        service = EmbeddingService(api_key="sk-old-way-123")
+
+        assert service.api_key == "sk-old-way-123"
+        assert service.get_api_key_source() == "parameter"
+        # Should not use SecretManager
+        assert service._secret_manager is None
+
+    @patch('core.embedding_service.OpenAI')
+    def test_backward_compat_with_env_var(self, mock_openai):
+        """Test backward compatibility with environment variable."""
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        import os
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-compat-456"}):
+            # Old way: no parameters, rely on env var
+            service = EmbeddingService()
+
+        assert service.api_key == "sk-env-compat-456"
+        assert service.get_api_key_source() == "environment"

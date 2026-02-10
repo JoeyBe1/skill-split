@@ -14,6 +14,20 @@ except ModuleNotFoundError:  # pragma: no cover
     OpenAI = None
     openai = None
 
+# Lazy import for SecretManager
+SecretManager = None
+
+
+def _ensure_secret_manager_imports():
+    """Lazy load SecretManager when needed."""
+    global SecretManager
+    if SecretManager is None:
+        try:
+            from core.secret_manager import SecretManager as SM
+            SecretManager = SM
+        except ImportError:
+            SecretManager = None
+
 
 class RateLimitError(Exception):
     """Raised when OpenAI rate limit is exceeded."""
@@ -37,29 +51,81 @@ class EmbeddingService:
         self,
         api_key: Optional[str] = None,
         model: str = DEFAULT_MODEL,
-        supabase_client: Optional[Any] = None
+        supabase_client: Optional[Any] = None,
+        secret_manager: Optional[Any] = None,
+        use_secret_manager: bool = True
     ):
         """
         Initialize the embedding service.
 
         Args:
-            api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
+            api_key: OpenAI API key. If None, tries SecretManager then env var
             model: Embedding model to use (default: text-embedding-3-small)
             supabase_client: Optional Supabase client for storing embeddings
+            secret_manager: Optional SecretManager instance for credential retrieval
+            use_secret_manager: If True, try SecretManager before env var (default: True)
 
         Raises:
             ImportError: If OpenAI client is not available
-            ValueError: If no API key provided and OPENAI_API_KEY env var not set
+            ValueError: If no API key found from any source
+
+        Credential priority order:
+            1. api_key parameter (direct)
+            2. SecretManager (if use_secret_manager=True and secret_manager provided or available)
+            3. OPENAI_API_KEY environment variable
         """
         if OpenAI is None:
             raise ImportError(
                 "OpenAI client not available. Install 'openai' package to use embedding features."
             )
 
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        # Ensure SecretManager imports if needed
+        _ensure_secret_manager_imports()
+
+        self._secret_manager = secret_manager
+        self._api_key_source = None  # Track where key came from for debugging
+
+        # Try to get API key from various sources
+        # Priority: api_key parameter > SecretManager > environment
+        if api_key:
+            # Direct parameter takes highest priority
+            self.api_key = api_key
+            self._api_key_source = "parameter"
+        elif use_secret_manager and secret_manager:
+            # Use provided SecretManager
+            try:
+                self.api_key, source_type = secret_manager.get_secret_with_source("OPENAI_API_KEY")
+                # Map SecretSourceType to string
+                self._api_key_source = source_type.value
+            except Exception:
+                # SecretManager failed, fall back to environment
+                self.api_key = os.getenv("OPENAI_API_KEY")
+                if self.api_key:
+                    self._api_key_source = "environment"
+        elif use_secret_manager and SecretManager:
+            # Create temporary SecretManager instance
+            try:
+                temp_manager = SecretManager()
+                self.api_key, source_type = temp_manager.get_secret_with_source("OPENAI_API_KEY")
+                # Map SecretSourceType to string
+                self._api_key_source = source_type.value
+                self._secret_manager = temp_manager
+            except Exception:
+                # SecretManager failed, fall back to environment
+                self.api_key = os.getenv("OPENAI_API_KEY")
+                if self.api_key:
+                    self._api_key_source = "environment"
+        else:
+            # Just use environment or parameter
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if self.api_key:
+                self._api_key_source = "environment" if not api_key else "parameter"
+
         if not self.api_key:
+            sources = ["api_key parameter", "SecretManager", "OPENAI_API_KEY environment variable"]
             raise ValueError(
-                "OpenAI API key not provided. Set OPENAI_API_KEY environment variable."
+                f"OpenAI API key not found. Tried: {', '.join(sources)}. "
+                f"Set OPENAI_API_KEY environment variable or provide api_key parameter."
             )
 
         self.model = model
@@ -251,6 +317,28 @@ class EmbeddingService:
     def reset_token_usage(self) -> None:
         """Reset token usage counter."""
         self._token_usage = 0
+
+    @property
+    def api_key_source(self) -> Optional[str]:
+        """
+        Get the source of the API key.
+
+        Returns:
+            Source string: "secret_manager", "parameter", "environment", or None
+        """
+        return self._api_key_source
+
+    def get_api_key_source(self) -> Optional[str]:
+        """
+        Get the source of the API key.
+
+        Useful for debugging and logging to understand where
+        credentials are coming from.
+
+        Returns:
+            Source string: "secret_manager", "parameter", "environment", or None
+        """
+        return self._api_key_source
 
     def estimate_cost(self, tokens_used: Optional[int] = None) -> float:
         """
