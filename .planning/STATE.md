@@ -99,6 +99,12 @@ Resume file: None
 
 - b8d8117: docs(07-02): add backup and restore workflow examples to EXAMPLES.md
 
+## Commits from 07-01
+
+- 0eecbc0: feat(07-01): add backup command documentation to README
+- 009f88d: docs(07-01): update test count from 518 to 623 in README
+- 0000976: docs(07-01): add restore command documentation to README (combined with 07-03)
+
 ## Commits from 06-03
 
 - 43d969a: feat(06-03): integrate SecretManager with SupabaseStore and CLI
