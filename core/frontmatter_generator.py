@@ -52,6 +52,7 @@ class FrontmatterGenerator:
         description: str,
         sections: List[Section],
         context: CompositionContext,
+        original_type: Optional[FileType] = None,
     ) -> str:
         """
         Generate YAML frontmatter for a composed skill.
@@ -69,6 +70,7 @@ class FrontmatterGenerator:
             description: Human-readable description
             sections: List of Section objects included
             context: CompositionContext with composition details
+            original_type: Optional FileType to preserve original component category
 
         Returns:
             YAML frontmatter as string (without --- delimiters)
@@ -76,11 +78,15 @@ class FrontmatterGenerator:
         # Build base metadata
         # Strictly following Claude Code skill schema
         slug = self._slugify(title)
-        
+
+        # Determine category - use original_type if provided, else default to "composed"
+        category = original_type.value if original_type else "composed"
+
         metadata = {
+            "title": title,  # Preserve original human-readable title
             "name": slug,
             "version": "1.0.0",  # Standard default
-            "category": "composed",  # Default category for composed skills
+            "category": category,  # Use original type or default to "composed"
             "description": description,
             "author": "SkillComposer",
             "created": context.created_at,  # ISO format timestamp
@@ -403,6 +409,7 @@ def generate_frontmatter(
     description: str,
     sections: List[Section],
     context: CompositionContext,
+    original_type: Optional[FileType] = None,
 ) -> str:
     """
     Generate YAML frontmatter for sections.
@@ -415,9 +422,10 @@ def generate_frontmatter(
         description: Skill description
         sections: List of sections to include
         context: Composition context
+        original_type: Optional FileType to preserve original component category
 
     Returns:
         YAML frontmatter as string
     """
     generator = FrontmatterGenerator()
-    return generator.generate(title, description, sections, context)
+    return generator.generate(title, description, sections, context, original_type)

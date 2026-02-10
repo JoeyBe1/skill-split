@@ -64,9 +64,9 @@ class Recomposer:
                 # Fall through to default recomposition
                 pass
 
-        # For hook/plugin/config files with no sections, return frontmatter as-is
-        # These are JSON/YAML configs stored byte-for-byte in frontmatter
-        if metadata.type in (FileType.HOOK, FileType.PLUGIN, FileType.CONFIG) and not sections:
+        # For hook/plugin/config files, return original JSON as-is
+        # These are stored byte-for-byte in frontmatter for exact round-trip
+        if metadata.type in (FileType.HOOK, FileType.PLUGIN, FileType.CONFIG):
             return metadata.frontmatter if metadata.frontmatter else ""
 
         # Build frontmatter portion
@@ -184,7 +184,7 @@ class Recomposer:
                     lines = section_content.splitlines(keepends=True)
                     # The parser's line_start is 1-based, and we need to find where child starts
                     # Child's line_start - section.line_start - 1 = index in our content
-                    child_offset = first_child_line - section.line_start - 1
+                    child_offset = first_child_line - section.line_start
                     if child_offset >= 0 and child_offset < len(lines):
                         section_content = "".join(lines[:child_offset])
 

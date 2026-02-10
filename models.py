@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class FileFormat(Enum):
@@ -59,6 +59,8 @@ class Section:
         line_end: Ending line number (1-based) in original file
         children: Nested subsections
         parent: Reference to parent section (for tree navigation)
+        file_id: Origin file ID (UUID for Supabase, int for SQLite) - optional
+        file_type: Origin file type - optional, used for composition
     """
 
     level: int
@@ -69,6 +71,8 @@ class Section:
     closing_tag_prefix: str = ""  # Whitespace before closing tag (e.g., "  " for "  </tag>")
     children: List[Section] = field(default_factory=list)
     parent: Optional[Section] = field(default=None, repr=False)
+    file_id: Optional[str] = None  # UUID for Supabase, int for SQLite (stored as str for consistency)
+    file_type: Optional[FileType] = None  # Origin file type, preserves context through composition
 
     def add_child(self, child: Section) -> None:
         """Add a child section, setting parent reference."""
@@ -237,3 +241,39 @@ class ComponentMetadata:
             "schema_version": self.schema_version,
             "dependencies": self.dependencies,
         }
+
+
+@dataclass
+class ComposedSkill:
+    """Represents a skill composed from multiple sections."""
+
+    section_ids: List[int]
+    sections: Dict[int, "Section"]
+    output_path: str
+    frontmatter: str
+    title: str
+    description: str
+    composed_hash: str = ""
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        return {
+            "section_ids": self.section_ids,
+            "output_path": self.output_path,
+            "frontmatter": self.frontmatter,
+            "title": self.title,
+            "description": self.description,
+            "composed_hash": self.composed_hash,
+        }
+
+
+@dataclass
+class CompositionContext:
+    """Metadata for skill composition process."""
+
+    source_files: List[str]
+    source_sections: int
+    target_format: FileFormat
+    created_at: str
+    validation_status: str = "pending"
+    errors: List[str] = field(default_factory=list)

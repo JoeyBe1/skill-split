@@ -50,7 +50,7 @@ class QueryAPI:
         return self.store.get_section(section_id)
 
     def get_next_section(
-        self, current_section_id: int, file_path: str
+        self, current_section_id: int, file_path: str, first_child: bool = False
     ) -> Optional[Section]:
         """
         Get the next sibling section or next top-level section.
@@ -58,9 +58,13 @@ class QueryAPI:
         Supports progressive disclosure workflow: after reading section N,
         get section N+1 without reloading the entire file.
 
+        When first_child=True, navigates to first child subsection instead
+        of next sibling. Useful for hierarchical exploration.
+
         Args:
             current_section_id: ID of the current section
             file_path: Path to the file containing the section
+            first_child: If True, return first child instead of next sibling
 
         Returns:
             The next Section object if one exists, None otherwise
@@ -68,10 +72,10 @@ class QueryAPI:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # Get current section's parent_id and order_index
+            # Get current section info
             cursor = conn.execute(
                 """
-                SELECT parent_id, order_index
+                SELECT parent_id, order_index, level
                 FROM sections WHERE id = ?
                 """,
                 (current_section_id,),
@@ -83,6 +87,7 @@ class QueryAPI:
 
             parent_id = row["parent_id"]
             current_order = row["order_index"]
+            current_level = row["level"]
 
             # Get file_id from file path
             cursor = conn.execute(
@@ -96,7 +101,33 @@ class QueryAPI:
 
             file_id = file_row["id"]
 
-            # Query for next section with same parent
+            # FIRST CHILD: Return first child subsection
+            if first_child:
+                cursor = conn.execute(
+                    """
+                    SELECT id, level, title, content, line_start, line_end
+                    FROM sections
+                    WHERE file_id = ? AND parent_id = ?
+                    ORDER BY order_index ASC
+                    LIMIT 1
+                    """,
+                    (file_id, current_section_id),
+                )
+                child_row = cursor.fetchone()
+
+                if child_row:
+                    return Section(
+                        level=child_row["level"],
+                        title=child_row["title"],
+                        content=child_row["content"],
+                        line_start=child_row["line_start"],
+                        line_end=child_row["line_end"],
+                    )
+
+                # No children, fall through to sibling behavior
+                # (or could return None to indicate no children)
+
+            # NEXT SIBLING: Query for next section with same parent
             cursor = conn.execute(
                 """
                 SELECT id, level, title, content, line_start, line_end
@@ -139,61 +170,27 @@ class QueryAPI:
         self, query: str, file_path: Optional[str] = None
     ) -> List[tuple[int, Section]]:
         """
-        Search sections by title or content.
+        Search sections by title or content using FTS5 full-text search.
 
-        Supports cross-file and single-file searches. Returns matches
-        along with their database IDs for progressive disclosure.
+        Now delegates to search_sections_with_rank() for BM25 relevance ranking.
+        Returns (section_id, Section) tuples ordered by relevance.
 
         Args:
-            query: Search string (searches in section titles and content)
-            file_path: Optional file path to limit search to one file.
-                      If None, searches all files.
+            query: Search string (FTS5 MATCH syntax supported)
+            file_path: Optional file path to limit search to one file
 
         Returns:
-            List of (section_id, Section) tuples matching the query
+            List of (section_id, Section) tuples matching the query, ranked by relevance
         """
-        results: List[tuple[int, Section]] = []
-        query_lower = query.lower()
+        # Get ranked results
+        ranked_results = self.search_sections_with_rank(query, file_path)
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-
-            if file_path:
-                # Single file search
-                cursor = conn.execute(
-                    """
-                    SELECT s.id, s.level, s.title, s.content,
-                           s.line_start, s.line_end
-                    FROM sections s
-                    JOIN files f ON s.file_id = f.id
-                    WHERE f.path = ?
-                      AND (LOWER(s.title) LIKE ? OR LOWER(s.content) LIKE ?)
-                    ORDER BY s.order_index
-                    """,
-                    (file_path, f"%{query_lower}%", f"%{query_lower}%"),
-                )
-            else:
-                # Cross-file search
-                cursor = conn.execute(
-                    """
-                    SELECT s.id, s.level, s.title, s.content,
-                           s.line_start, s.line_end
-                    FROM sections s
-                    WHERE LOWER(s.title) LIKE ? OR LOWER(s.content) LIKE ?
-                    ORDER BY s.id
-                    """,
-                    (f"%{query_lower}%", f"%{query_lower}%"),
-                )
-
-            for row in cursor.fetchall():
-                section = Section(
-                    level=row["level"],
-                    title=row["title"],
-                    content=row["content"],
-                    line_start=row["line_start"],
-                    line_end=row["line_end"],
-                )
-                results.append((row["id"], section))
+        # Convert to (section_id, Section) tuples
+        results = []
+        for section_id, rank in ranked_results:
+            section = self.get_section(section_id)
+            if section:
+                results.append((section_id, section))
 
         return results
 
@@ -214,3 +211,18 @@ class QueryAPI:
             List of (section_id, rank) tuples where higher rank = more relevant
         """
         return self.store.search_sections_with_rank(query, file_path)
+
+    def preprocess_query(self, query: str) -> str:
+        """
+        Preprocess search query for optimal FTS5 syntax.
+
+        Exposes DatabaseStore preprocessing for users who want to
+        understand how their query will be interpreted.
+
+        Args:
+            query: Raw search query
+
+        Returns:
+            Processed FTS5 MATCH syntax
+        """
+        return self.store.preprocess_fts5_query(query)

@@ -29,26 +29,31 @@ class ConfigHandler(BaseHandler):
 
     def parse(self) -> ParsedDocument:
         """
-        Parse config file - store original JSON in frontmatter.
+        Parse config file while preserving byte-perfect original content.
 
-        For config files (settings.json, mcp_config.json), we store the
-        original JSON content as-is without creating sections. This ensures
-        byte-perfect round-trip reconstruction.
-
-        Returns:
-            ParsedDocument with original JSON content (no sections)
-
-        Raises:
-            json.JSONDecodeError: If config file is invalid
+        We store the original JSON exactly in frontmatter for exact
+        round-trip reconstruction, AND generate sections for progressive
+        disclosure (one per top-level key).
         """
-        # Validate JSON structure
         config_data = json.loads(self.content)
+        sections: List[Section] = []
 
-        # Store original JSON exactly in frontmatter field (no sections)
-        # Recomposer will return frontmatter as-is for FileType.CONFIG with no sections
+        if isinstance(config_data, dict):
+            for key, value in config_data.items():
+                section_content = self._format_config_item(key, value).strip()
+                if section_content:
+                    section_content = section_content + "\n"
+                sections.append(Section(
+                    level=1,
+                    title=str(key),
+                    content=section_content,
+                    line_start=1,
+                    line_end=len(section_content.splitlines()) if section_content else 1,
+                ))
+
         return ParsedDocument(
             frontmatter=self.content,  # Store original JSON exactly
-            sections=[],                # No sections - preserve as single unit
+            sections=sections,
             file_type=FileType.CONFIG,
             format=FileFormat.JSON,
             original_path=self.file_path,

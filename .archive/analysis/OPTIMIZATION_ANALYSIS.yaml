@@ -1,0 +1,95 @@
+analysis:
+  current_state:
+    approach: Sequential subprocess calls to CLI
+    bottleneck: "subprocess + CLI overhead per file (parse, hash, store)"
+    files: 1367
+    estimated_time: 11 hours (~29 sec per file)
+    files_per_hour: 123
+
+options:
+  option_1_parallel_processing:
+    description: "multiprocessing.Pool for 5-10 concurrent ingest operations"
+    speed_improvement: "4-8x (1.4-2.7 hours for 1367 files)"
+    complexity: 45 lines of code
+    risk: "medium"
+    reasoning:
+      - subprocess.run() has I/O wait (network, disk)
+      - Process pool exploits concurrent Supabase requests
+      - Supabase has per-project rate limits (~1000 req/sec standard)
+      - 10 processes × 29sec per file = ~2.9sec per batch
+    implementation: "Add ProcessPoolExecutor, pool.map(ingest_file, file_paths)"
+    caveats:
+      - shared SQLite connections need thread safety (use WAL mode)
+      - Supabase client instances need per-worker creation
+      - Network I/O still serializes at Supabase endpoint
+
+  option_2_direct_supabase_store:
+    description: "Import SupabaseStore directly, bypass CLI subprocess overhead"
+    speed_improvement: "2-3x (3.5-5.5 hours for 1367 files)"
+    complexity: 80 lines of code
+    risk: "low"
+    reasoning:
+      - CLI subprocess startup: ~200ms per file
+      - ArgumentParser overhead: ~50ms per file
+      - Direct import eliminates 250ms × 1367 = ~6 hours overhead
+      - SupabaseStore.store_file() is already optimized
+    implementation: "Rewrite bulk_ingest to import SupabaseStore, Parser, FormatDetector directly"
+    caveats:
+      - must ensure imports match CLI behavior exactly
+      - missing CLI argument validation logic (minor)
+      - error handling must match current logging
+    wins:
+      - no subprocess overhead
+      - reuse all existing validation
+      - single Python process = simpler parallelization later
+
+  option_3_batch_inserts:
+    description: "Check Supabase batch API, reduce network roundtrips"
+    speed_improvement: "1.2-1.5x (7-9 hours for 1367 files)"
+    complexity: 120 lines of code
+    risk: "high"
+    reasoning:
+      - Supabase REST API doesn't expose batch insert (must use RPC or REST)
+      - Each file = ~5-10 INSERT calls (1 file + 19 sections avg)
+      - Batch 10 files = 50-100 inserts at once
+      - Network latency dominates (not INSERT speed)
+      - Benefit ~10-20% only if using RPC functions
+    caveats:
+      - requires custom RPC functions in Supabase
+      - complex transaction handling (cascade deletes)
+      - minimal gain over direct store approach
+    recommendation: "Skip this. Option 2 + Option 1 better ROI"
+
+  option_4_skip_synced_files:
+    description: "Query Supabase first, only ingest missing files"
+    speed_improvement: "variable (5-11 hours depending on sync state)"
+    complexity: 25 lines of code
+    risk: "low"
+    reasoning:
+      - Current DB: 1367 files, Supabase: unknown (possibly 0-1367)
+      - If 50% already synced: skip 683 files = save 5.5 hours
+      - If 0% synced: no improvement
+      - Fast initial query (get_all_files ~ 500ms)
+    implementation: "store.get_all_files(), build set of storage_paths, skip present files"
+    caveats:
+      - hash mismatch detection needed (update vs skip)
+      - adds complexity to error recovery
+    recommendation: "Combine with Options 1 or 2 for full benefit"
+
+recommendation:
+  best_approach: "Option 2 + Option 4 + Option 1 (staged)"
+  rationale:
+    stage_1: "Implement Option 2 (direct SupabaseStore): 2-3x speedup, low risk, 80 LOC"
+    stage_2: "Add Option 4 (skip synced): Another 50% speedup if files missing, 25 LOC"
+    stage_3: "Add Option 1 (parallel): 4-8x speedup after Option 2, 45 LOC"
+  expected_timeline:
+    - option_2_only: "3.5-5.5 hours (2-3x faster)"
+    - option_2_plus_4: "1.75-5.5 hours (50-60% incremental if Supabase empty)"
+    - all_three: "0.45-1.4 hours (10-24x faster than current)"
+  confidence: "85% (subprocess overhead verified, Supabase latency known)"
+
+metrics_baseline:
+  cli_subprocess_overhead: "~250ms per file (startup + parse args)"
+  supabase_latency: "~15-25ms per request"
+  network_bound: "yes (not CPU bound)"
+  recommended_worker_count: "6-8 processes (Supabase std tier ~1000 req/sec)"

@@ -4,7 +4,7 @@ import sys
 import tempfile
 from pathlib import Path
 from uuid import uuid4
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock
 import pytest
 import argparse
 
@@ -16,10 +16,9 @@ from core.checkout_manager import CheckoutManager
 
 
 @pytest.fixture
-def mock_supabase_store(mocker):
+def mock_supabase_store():
     """Mock SupabaseStore for testing."""
-    store = MagicMock(spec=SupabaseStore)
-    return store
+    return MagicMock(spec=SupabaseStore)
 
 
 @pytest.fixture
@@ -69,7 +68,7 @@ Second test skill content
 class TestIngestCommand:
     """Test the ingest command."""
 
-    def test_ingest_command_stores_files_from_directory(self, tmp_path, mock_supabase_store, mocker):
+    def test_ingest_command_stores_files_from_directory(self, tmp_path, mock_supabase_store, monkeypatch):
         """Test that ingest command parses and stores files from a directory."""
         # Create test skill files
         skill_dir = tmp_path / "skills"
@@ -86,13 +85,11 @@ Test skill content
 """)
 
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock SupabaseStore
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_supabase_store)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_supabase_store)
         mock_supabase_store.store_file.return_value = str(uuid4())
 
         # Import the command function
@@ -112,16 +109,14 @@ Test skill content
         # Should have called store_file at least once
         assert mock_supabase_store.store_file.called
 
-    def test_ingest_command_prints_count(self, temp_skill_dir, mock_supabase_store, mocker, capsys):
+    def test_ingest_command_prints_count(self, temp_skill_dir, mock_supabase_store, monkeypatch, capsys):
         """Test that ingest command prints count of stored files."""
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock SupabaseStore
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_supabase_store)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_supabase_store)
         mock_supabase_store.store_file.return_value = str(uuid4())
 
         from skill_split import cmd_ingest
@@ -138,21 +133,19 @@ Test skill content
 class TestCheckoutCommand:
     """Test the checkout command."""
 
-    def test_checkout_command_deploys_file_to_target(self, tmp_path, mock_supabase_store, mocker):
+    def test_checkout_command_deploys_file_to_target(self, tmp_path, mock_supabase_store, monkeypatch):
         """Test that checkout command copies file to target path."""
         target_dir = tmp_path / "target"
         file_id = str(uuid4())
 
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock CheckoutManager
-        mocker.patch('skill_split.CheckoutManager')
         mock_checkout_manager = MagicMock()
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_supabase_store)
+        monkeypatch.setattr('skill_split.CheckoutManager', lambda *args, **kwargs: mock_checkout_manager)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_supabase_store)
 
         # Mock the checkout operation
         target_path = str(target_dir / "SKILL.md")
@@ -173,17 +166,15 @@ class TestCheckoutCommand:
 class TestCheckinCommand:
     """Test the checkin command."""
 
-    def test_checkin_command_removes_file(self, tmp_path, mock_supabase_store, mocker):
+    def test_checkin_command_removes_file(self, tmp_path, mock_supabase_store, monkeypatch):
         """Test that checkin command removes deployed file."""
         # Create a temporary file to checkin
         target_file = tmp_path / "SKILL.md"
         target_file.write_text("# Test Content")
 
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock the checkin operation
         from skill_split import cmd_checkin
@@ -196,17 +187,15 @@ class TestCheckinCommand:
 class TestListCommand:
     """Test the list command."""
 
-    def test_list_command_displays_files(self, mocker, capsys):
+    def test_list_command_displays_files(self, monkeypatch, capsys):
         """Test that list command displays files in library."""
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock SupabaseStore with direct method mocking
         mock_store = MagicMock()
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_store)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_store)
 
         # Mock file list response
         mock_store.get_all_files.return_value = [
@@ -232,17 +221,15 @@ class TestListCommand:
 class TestStatusCommand:
     """Test the status command."""
 
-    def test_status_command_shows_active_checkouts(self, mocker, capsys):
+    def test_status_command_shows_active_checkouts(self, monkeypatch, capsys):
         """Test that status command shows active checkouts."""
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock SupabaseStore
         mock_store = MagicMock()
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_store)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_store)
 
         # Mock active checkouts
         file_uuid = str(uuid4())
@@ -269,17 +256,15 @@ class TestStatusCommand:
 class TestSearchCommand:
     """Test the search command."""
 
-    def test_search_command_finds_files(self, mocker, capsys):
+    def test_search_command_finds_files(self, monkeypatch, capsys):
         """Test that search command finds files by query."""
         # Mock environment variables
-        mocker.patch.dict(os.environ, {
-            'SUPABASE_URL': 'https://test.supabase.co',
-            'SUPABASE_KEY': 'test-key'
-        })
+        monkeypatch.setenv('SUPABASE_URL', 'https://test.supabase.co')
+        monkeypatch.setenv('SUPABASE_KEY', 'test-key')
 
         # Mock SupabaseStore
         mock_store = MagicMock()
-        mocker.patch('skill_split.SupabaseStore', return_value=mock_store)
+        monkeypatch.setattr('skill_split.SupabaseStore', lambda *args, **kwargs: mock_store)
 
         # Mock search results
         mock_store.search_files.return_value = [

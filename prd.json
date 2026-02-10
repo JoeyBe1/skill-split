@@ -1,21 +1,21 @@
 {
   "metadata": {
     "project_name": "skill-split",
-    "version": "1.0.0",
-    "status": "phase-5-6-complete",
+    "version": "1.1.0",
+    "status": "phase-11-complete",
     "created": "2026-02-03",
-    "last_updated": "2026-02-03",
-    "phases_complete": [1, 2, 3, 4, 5, 6],
-    "final_test_count": 75,
+    "last_updated": "2026-02-06",
+    "phases_complete": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "final_test_count": 499,
     "all_tests_passing": true
   },
   "context_anchor": {
     "purpose": "Progressive disclosure of large files via section-based SQLite storage",
     "tech_stack": ["Python 3.x", "SQLite", "Click", "pytest"],
     "conventions": "Simple Python, verify via hashing, EXACT byte match on round-trip, test-first mindset",
-    "phases_complete": [1, 2, 3, 4, 5, 6],
-    "test_count": 75,
-    "architecture": "Parser -> Database -> Recomposer (byte-perfect round-trip)"
+    "phases_complete": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "test_count": 499,
+    "architecture": "Parser -> Database -> Recomposer (byte-perfect round-trip) -> SkillComposer"
   },
   "roadmap": [
     {
@@ -127,16 +127,47 @@
       "verification": "echo 'Manual verification: Tests documented and working'",
       "dependencies": ["TASK-010"],
       "parallel_safe": false
+    },
+    {
+      "id": "TASK-012",
+      "feature": "SkillComposer Implementation",
+      "description": "Implement core/skill_composer.py for composing skills from sections with hierarchy rebuilding.",
+      "status": "done",
+      "files": ["core/skill_composer.py"],
+      "verification": "pytest test/test_skill_composer.py",
+      "dependencies": ["TASK-011"],
+      "parallel_safe": true
+    },
+    {
+      "id": "TASK-013",
+      "feature": "CLI Compose Command",
+      "description": "Add 'compose' command to CLI for creating new skills from section IDs.",
+      "status": "done",
+      "files": ["skill_split.py"],
+      "verification": "./skill_split.py compose --help",
+      "dependencies": ["TASK-012"],
+      "parallel_safe": false
+    },
+    {
+      "id": "TASK-014",
+      "feature": "Absolute Line Number Fix",
+      "description": "Update parser and recomposer to use absolute line numbers for accurate slicing.",
+      "status": "done",
+      "files": ["core/parser.py", "core/recomposer.py"],
+      "verification": "pytest test/test_roundtrip.py",
+      "dependencies": ["TASK-012"],
+      "parallel_safe": false
     }
   ],
-  "active_task_id": "TASK-011",
+  "active_task_id": "TASK-014",
   "execution_waves": {
     "wave_1": ["TASK-001", "TASK-004", "TASK-005", "TASK-006", "TASK-009"],
     "wave_2": ["TASK-002", "TASK-003"],
     "wave_3": ["TASK-007"],
     "wave_4": ["TASK-008"],
     "wave_5": ["TASK-010"],
-    "wave_6": ["TASK-011"]
+    "wave_6": ["TASK-011"],
+    "wave_7": ["TASK-012", "TASK-013", "TASK-014"]
   },
   "learning_log": [
     "2026-02-03: Phases 1-4 complete. Parser handles YAML frontmatter, markdown headings, XML tags. Database stores sections. Recomposer achieves byte-perfect round-trip (hashes match). 28 tests passing.",
@@ -152,14 +183,16 @@
     "2026-02-03: TASK-007 (Integration Testing) complete. All 75 tests pass (final count). Bug fixes: (1) Fixed recomposer has_body check - was checking if sections had stripped content, now correctly checks if sections exist (fixes frontmatter blank line preservation). (2) Updated test_cli.py to use correct function names cmd_list_library and cmd_search_library (renamed from cmd_list/cmd_search). (3) Fixed demo script argument formats - store, verify, tree, list, search commands use correct --db flag and positional args. Verification: pytest -v ✓ 75 passed in 0.57s. Demo script completed all 8 steps successfully (parse, validate, store, verify, list, tree, search). All 16 CLI commands verified working: 6 core (parse, validate, store, get, tree, verify) + 6 Supabase (ingest, checkout, checkin, list-library, status, search-library) + 4 new QueryAPI (get-section, next, list, search). README and EXAMPLES documentation verified. Round-trip integrity confirmed with SHA256 hashing across all test fixtures.",
     "2026-02-03: TASK-008 (Update Project Status) complete. Updated CLAUDE.md: changed 'Current State' to 'Phases 1-6 Complete (75/75 tests passing)', removed 'Remaining Work' section, added 'What's Complete' section listing all phases 1-6 features with QueryAPI methods and 16 CLI commands. Updated file structure to include core/query.py, test/test_query.py, test/test_cli.py, demo/progressive_disclosure.sh, demo/sample_skill.md, EXAMPLES.md, README.md, .claude/skills/skill-split.md. Added 'Usage Examples' link to EXAMPLES.md and 'Demo' section pointing to progressive_disclosure.sh. Updated 'Key Technical Properties' section to emphasize progressive disclosure and test coverage. Updated timestamp to 2026-02-03 (Phases 1-6 Complete). Verification: grep -q 'Phases 1-6 Complete' CLAUDE.md ✓ PASSED. Updated prd.json: marked TASK-008 status as 'done', advanced active_task_id to 'TASK-010'.",
     "2026-02-03: TASK-010 (Install Skill) complete. Created symlink from ~/.claude/skills/custom/skill-split.md to /Users/joey/working/skill-split/.claude/skills/skill-split.md using preferred symlink method. Installation method used: symlink (ln -s). Verified discoverability: test -f ~/.claude/skills/custom/skill-split.md ✓ PASSED. Verified skill_split.py accessibility: /Users/joey/working/skill-split/skill_split.py ✓ Found. Skill-split is now discoverable to Claude Code. All installation requirements met. Advanced active_task_id to TASK-011.",
-    "2026-02-03: TASK-011 (End-to-End Skill Testing) complete. Executed comprehensive testing of skill-split as Claude Code skill. All tests passed: (1) Skill file verified at ~/.claude/skills/custom/skill-split.md with valid YAML frontmatter, (2) Basic workflow tested: parse demo/sample_skill.md ✓, store to database ✓, retrieve sections ✓, search content ✓, (3) Progressive disclosure demonstrated: Sample file 310 lines / 6,300 tokens loaded progressively in 5 steps using 2,250 tokens = 64% token savings. Multi-file scenario: 91% token savings on 5-file navigation (28,600 tokens saved), (4) Test coverage: 75 unit tests passing across all phases, demo script verified, (5) Documentation: Created TASK-011-TEST-REPORT.md with full test results, token savings metrics, working examples, and verification checklist. All 7 CLI commands working: parse, store, get-section, search, list, tree, verify. Progressive disclosure achieves 64%-91% token reduction vs loading entire files. Skill ready for production use in Claude Code."
+    "2026-02-03: TASK-011 (End-to-End Skill Testing) complete. Executed comprehensive testing of skill-split as Claude Code skill. All tests passed: (1) Skill file verified at ~/.claude/skills/custom/skill-split.md with valid YAML frontmatter, (2) Basic workflow tested: parse demo/sample_skill.md ✓, store to database ✓, retrieve sections ✓, search content ✓, (3) Progressive disclosure demonstrated: Sample file 310 lines / 6,300 tokens loaded progressively in 5 steps using 2,250 tokens = 64% token savings. Multi-file scenario: 91% token savings on 5-file navigation (28,600 tokens saved), (4) Test coverage: 75 unit tests passing across all phases, demo script verified, (5) Documentation: Created TASK-011-TEST-REPORT.md with full test results, token savings metrics, working examples, and verification checklist. All 7 CLI commands working: parse, store, get-section, search, list, tree, verify. Progressive disclosure achieves 64%-91% token reduction vs loading entire files. Skill ready for production use in Claude Code.",
+    "2026-02-06: Phase 11 (Skill Composition) complete. Implemented SkillComposer, compose command, and fixed absolute line number tracking in Parser/Recomposer to support byte-perfect composition and round-trips. All 499 tests passing."
   ],
   "completion_criteria": {
     "phase_5": "QueryAPI implemented and tested",
     "phase_6": "CLI complete with all query commands",
     "skill_integration": "skill-split usable as Claude Code skill",
     "documentation": "README, EXAMPLES, demo script all working",
-    "final_verification": "All tests pass, demo runs, skill installed"
+    "final_verification": "All tests pass, demo runs, skill installed",
+    "phase_11": "SkillComposer implemented and validated"
   },
   "notes": {
     "philosophy": "Assume errors to avoid them. Keep things simple. Verify via hashing.",

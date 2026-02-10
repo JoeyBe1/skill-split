@@ -74,7 +74,7 @@ class TestHookHandler:
 
         assert doc.file_type == FileType.HOOK
         assert doc.format == FileFormat.MULTI_FILE
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 2  # One section per hook
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "pre-commit" in doc.frontmatter
         assert "post-commit" in doc.frontmatter

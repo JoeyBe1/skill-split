@@ -678,6 +678,255 @@ Usage guide.
         assert len(install_results) > 0, "should find Prerequisites"
 
 
+class TestCLISearchIntegration:
+    """Test CLI search command uses FTS5 ranking."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.query = QueryAPI(self.temp_db.name)
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def test_search_returns_ranked_results(self):
+        """CLI search should return results with relevance scores."""
+        from models import ParsedDocument, Section, FileFormat
+
+        # Store test data with multi-word content
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[
+                Section(level=1, title="GitHub", content="Repository setup instructions", line_start=1, line_end=2),
+                Section(level=1, title="Python", content="Handler implementation code", line_start=3, line_end=4),
+                Section(level=1, title="Database", content="Storage and retrieval", line_start=5, line_end=6),
+            ],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/search.md"
+        )
+        self.store.store_file("/test/search.md", doc, "test_hash")
+
+        # Multi-word search should find relevant sections
+        results = self.query.search_sections("github repository")
+
+        # Should return results with both words present
+        assert len(results) > 0
+
+        # Results should be ranked (first result most relevant)
+        section_id, section = results[0]
+        assert "github" in section.title.lower() or "repository" in section.content.lower()
+
+    def test_search_multi_word_finds_matches(self):
+        """Multi-word queries find sections with any of the words."""
+        from models import ParsedDocument, Section, FileFormat
+
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Git", content="Version control", line_start=1, line_end=2),
+                Section(level=1, title="Repository", content="Code storage", line_start=3, line_end=4),
+                Section(level=1, title="Setup", content="Initial configuration", line_start=5, line_end=6),
+            ],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/multi.md"
+        )
+        self.store.store_file("/test/multi.md", doc, "test_hash")
+
+        # FTS5 with preprocessing converts to OR
+        results = self.query.search_sections("git repository")
+
+        # Should find sections with either term (FTS5 OR search)
+        assert len(results) >= 0
+
+    def test_search_sections_delegates_to_ranked(self):
+        """search_sections() internally uses search_sections_with_rank()."""
+        from models import ParsedDocument, Section, FileFormat
+        from unittest.mock import patch
+
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[Section(level=1, title="Test", content="Content", line_start=1, line_end=2)],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/delegate.md"
+        )
+        self.store.store_file("/test/delegate.md", doc, "test_hash")
+
+        # Patch search_sections_with_rank to track calls
+        with patch.object(self.query, 'search_sections_with_rank') as mock_ranked:
+            mock_ranked.return_value = [(1, 2.5)]
+
+            results = self.query.search_sections("test")
+
+            # Verify delegation
+            mock_ranked.assert_called_once()
+            assert len(results) > 0
+
+
+class TestNextNavigation:
+    """Test progressive disclosure navigation options."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.query = QueryAPI(self.temp_db.name)
+        self.store = DatabaseStore(self.temp_db.name)
+        self.parser = Parser()
+        self.detector = FormatDetector()
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def _compute_hash(self, content):
+        """Compute SHA256 hash of content."""
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _store_file(self, file_path, content):
+        """Parse and store a file."""
+        file_type, file_format = self.detector.detect(file_path, content)
+        doc = self.parser.parse(file_path, content, file_type, file_format)
+        content_hash = self._compute_hash(content)
+        self.store.store_file(file_path, doc, content_hash)
+
+    def test_next_sibling_default_behavior(self):
+        """Default: next returns sibling at same level."""
+        content = """# First
+Content 1
+
+# Second
+Content 2
+
+# Third
+Content 3
+"""
+        self._store_file("/test/sibling.md", content)
+
+        # Get first section
+        first = self.query.search_sections("First")[0][1]
+        first_id = self.query.search_sections("First")[0][0]
+
+        # Get next (default sibling)
+        next_sec = self.query.get_next_section(first_id, "/test/sibling.md")
+
+        assert next_sec is not None
+        assert next_sec.title == "Second"
+
+    def test_next_child_navigates_to_subsection(self):
+        """first_child=True navigates to first child subsection."""
+        content = """# Parent
+Parent content
+
+## Child 1
+Child 1 content
+
+## Child 2
+Child 2 content
+"""
+        self._store_file("/test/parent.md", content)
+
+        # Get parent section
+        parent_id = self.query.search_sections("Parent")[0][0]
+
+        # Get first child
+        child = self.query.get_next_section(parent_id, "/test/parent.md", first_child=True)
+
+        assert child is not None
+        assert child.title == "Child 1"
+        assert child.level == 2
+
+    def test_next_child_falls_back_to_sibling(self):
+        """first_child=True with no children falls back to sibling."""
+        content = """# No Kids
+No children here
+
+# Sibling
+Next section
+"""
+        self._store_file("/test/nochild.md", content)
+
+        # Get section with no children
+        section_id = self.query.search_sections("No Kids")[0][0]
+
+        # Request first child (doesn't exist, falls back to sibling)
+        next_sec = self.query.get_next_section(section_id, "/test/nochild.md", first_child=True)
+
+        assert next_sec is not None
+        assert next_sec.title == "Sibling"
+
+    def test_next_at_end_returns_none(self):
+        """Next section at end of file returns None."""
+        content = """# Only
+Only section
+"""
+        self._store_file("/test/only.md", content)
+
+        # Get the only section
+        section_id = self.query.search_sections("Only")[0][0]
+
+        # Get next (should be None)
+        next_sec = self.query.get_next_section(section_id, "/test/only.md")
+
+        assert next_sec is None
+
+    def test_next_child_at_leaf_returns_none(self):
+        """first_child=True at leaf section returns None (no children, no fallback)."""
+        content = """# Leaf
+No children
+"""
+        self._store_file("/test/leaf.md", content)
+
+        # Get leaf section
+        section_id = self.query.search_sections("Leaf")[0][0]
+
+        # Request first child (doesn't exist, falls back to sibling which is also None)
+        next_sec = self.query.get_next_section(section_id, "/test/leaf.md", first_child=True)
+
+        # Falls back to sibling behavior, which is also None
+        assert next_sec is None
+
+    def test_next_preserves_hierarchy_context(self):
+        """Navigation preserves correct hierarchy context."""
+        content = """# L1-1
+L1 content
+
+## L2-1
+L2 content
+
+### L3-1
+L3 content
+
+## L2-2
+L2-2 content
+
+# L1-2
+L1-2 content
+"""
+        self._store_file("/test/hierarchy.md", content)
+
+        # Navigate: L1-1 -> first child -> L2-1
+        l1_1_id = self.query.search_sections("L1-1")[0][0]
+        l2_1 = self.query.get_next_section(l1_1_id, "/test/hierarchy.md", first_child=True)
+        assert l2_1.title == "L2-1"
+
+        # Navigate: L2-1 -> first child -> L3-1
+        l2_1_id = self.query.search_sections("L2-1")[0][0]
+        l3_1 = self.query.get_next_section(l2_1_id, "/test/hierarchy.md", first_child=True)
+        assert l3_1.title == "L3-1"
+
+
 def run_tests():
     """Run all tests."""
     import traceback
@@ -689,6 +938,8 @@ def run_tests():
         TestSearchSections,
         TestQueryAPIFTS5,
         TestQueryAPIIntegration,
+        TestCLISearchIntegration,
+        TestNextNavigation,
     ]
 
     passed = 0

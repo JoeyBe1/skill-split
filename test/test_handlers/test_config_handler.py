@@ -87,7 +87,7 @@ class TestConfigHandler:
 
         assert doc.file_type == FileType.CONFIG
         assert doc.format == FileFormat.JSON
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 3  # One section per top-level key
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "permissions" in doc.frontmatter
 
@@ -96,7 +96,7 @@ class TestConfigHandler:
         handler = ConfigHandler(mcp_config_file)
         doc = handler.parse()
 
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 2  # One section per top-level key
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "test-server" in doc.frontmatter
         assert "remote-server" in doc.frontmatter

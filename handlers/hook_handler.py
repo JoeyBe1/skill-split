@@ -28,25 +28,67 @@ class HookHandler(BaseHandler):
 
     def parse(self) -> ParsedDocument:
         """
-        Parse hooks.json - store original content for byte-perfect reconstruction.
+        Parse hooks.json while preserving byte-perfect original content.
 
-        For hooks.json files, we store the original JSON content as-is without
-        creating sections. This ensures byte-perfect round-trip reconstruction.
-
-        Returns:
-            ParsedDocument with original JSON content (no sections)
-
-        Raises:
-            json.JSONDecodeError: If hooks.json is invalid
+        We store the original JSON exactly in frontmatter for exact
+        round-trip reconstruction, AND generate sections for progressive
+        disclosure (one per hook, plus optional overview).
         """
-        # Validate JSON structure
         hooks_data = json.loads(self.content)
+        sections: List[Section] = []
 
-        # Store original JSON exactly in frontmatter field (no sections)
-        # Recomposer will return frontmatter as-is for FileType.HOOK with no sections
+        # Detect plugin-style hook file: { "description": "...", "hooks": {...} }
+        hook_map = hooks_data
+        if isinstance(hooks_data, dict) and "hooks" in hooks_data and isinstance(hooks_data.get("hooks"), dict):
+            description = hooks_data.get("description")
+            overview_lines = ["# overview"]
+            if description:
+                overview_lines.append(f"**Description**: {description}")
+            overview_content = "\n".join(overview_lines).strip() + "\n"
+            sections.append(Section(
+                level=1,
+                title="overview",
+                content=overview_content,
+                line_start=1,
+                line_end=len(overview_content.splitlines()),
+            ))
+            hook_map = hooks_data.get("hooks", {})
+
+        if isinstance(hook_map, dict):
+            for hook_name, hook_config in hook_map.items():
+                section_lines = [f"# {hook_name}"]
+
+                if isinstance(hook_config, dict):
+                    if "description" in hook_config:
+                        section_lines.append(f"**Description**: {hook_config.get('description')}")
+                    # Include full config as JSON for clarity
+                    section_lines.append("## Config")
+                    section_lines.append(json.dumps(hook_config, indent=2))
+                else:
+                    # Non-dict config, include raw value
+                    section_lines.append("## Config")
+                    section_lines.append(json.dumps(hook_config, indent=2))
+
+                # Include script content if present
+                script_path = Path(self.file_path).parent / f"{hook_name}.sh"
+                if script_path.exists():
+                    section_lines.append("## Script")
+                    section_lines.append("```bash")
+                    section_lines.append(script_path.read_text().rstrip("\n"))
+                    section_lines.append("```")
+
+                section_content = "\n".join(section_lines).strip() + "\n"
+                sections.append(Section(
+                    level=1,
+                    title=hook_name,
+                    content=section_content,
+                    line_start=1,
+                    line_end=len(section_content.splitlines()),
+                ))
+
         return ParsedDocument(
             frontmatter=self.content,  # Store original JSON exactly
-            sections=[],                # No sections - preserve as single unit
+            sections=sections,
             file_type=FileType.HOOK,
             format=FileFormat.MULTI_FILE,
             original_path=self.file_path,

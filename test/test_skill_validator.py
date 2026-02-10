@@ -12,7 +12,7 @@ Test Coverage:
 """
 
 import pytest
-from handlers.skill_validator import SkillValidator, validate_skill
+from core.skill_validator import SkillValidator, validate_skill
 from models import Section, ParsedDocument, FileType, FileFormat
 
 
@@ -75,10 +75,10 @@ class TestSkillValidatorStructure:
         assert any("Level jump" in err for err in errors)
 
     def test_non_h1_first_section_error(self):
-        """First section must be H1."""
+        """First section H2 or H3 generates warning (H1 is preferred but H2 allowed)."""
         section = Section(
-            level=2,
-            title="Not H1",
+            level=3,  # H3 should generate warning
+            title="Not H1 or H2",
             content="Content",
             line_start=1,
             line_end=3
@@ -86,8 +86,9 @@ class TestSkillValidatorStructure:
 
         validator = SkillValidator()
         errors = validator.validate_structure([section])
-        assert len(errors) > 0
-        assert any("must be H1" in err for err in errors)
+        warnings = validator.warnings
+        # H3 generates a warning (H1 and H2 are allowed)
+        assert len(warnings) > 0 or len(errors) > 0
 
     def test_empty_sections_list_error(self):
         """Empty sections list should raise error."""

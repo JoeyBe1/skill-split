@@ -14,7 +14,7 @@ Phase 11: Skill Composition API
 from typing import Dict, List, Optional, Union
 from pathlib import Path
 
-from models import ComposedSkill, CompositionContext, FileFormat, Section
+from models import ComposedSkill, CompositionContext, FileFormat, Section, FileType
 from core.database import DatabaseStore
 from core.query import QueryAPI
 
@@ -123,14 +123,17 @@ class SkillComposer:
         composition_timestamp = f"2023-01-01T00:00:00.{input_hash[:6]}Z"  # Fixed timestamp for same inputs
 
         # 4. Generate frontmatter (with enrichment if requested)
+        # Detect original file_type from sections to preserve through composition
+        original_type = self._detect_original_type(sections)
+
         if enrich:
             frontmatter = self._generate_frontmatter(
-                title, description, sorted_sections, section_ids, composition_timestamp
+                title, description, sorted_sections, section_ids, composition_timestamp, original_type
             )
         else:
             # Use basic frontmatter generation if enrichment is disabled
             frontmatter = self._generate_basic_frontmatter(
-                title, description, sorted_sections, section_ids
+                title, description, sorted_sections, section_ids, original_type
             )
 
         # 5. Create and return ComposedSkill
@@ -192,6 +195,30 @@ class SkillComposer:
 
         return sections
 
+    def _detect_original_type(self, sections: Dict[int, Section]) -> Optional[FileType]:
+        """
+        Detect the original file_type from sections.
+
+        Inspects all sections to find the most common file_type.
+        Returns None if no sections have file_type set.
+
+        Args:
+            sections: Dictionary mapping section_id to Section
+
+        Returns:
+            The most common FileType among sections, or None if none found
+        """
+        # Collect all non-None file_types
+        file_types = [s.file_type for s in sections.values() if s.file_type is not None]
+
+        if not file_types:
+            return None
+
+        # Return the most common file_type (first if tied)
+        from collections import Counter
+        counter = Counter(file_types)
+        return counter.most_common(1)[0][0]
+
     def _rebuild_hierarchy(self, sections: List[Section]) -> List[Section]:
         """
         Reconstruct parent-child relationships from ordered list.
@@ -238,7 +265,8 @@ class SkillComposer:
         description: str,
         sections: List[Section],
         section_ids: List[int] = None,
-        timestamp: str = None
+        timestamp: str = None,
+        original_type: Optional[FileType] = None,
     ) -> str:
         """
         Generate YAML frontmatter for composed skill.
@@ -254,6 +282,9 @@ class SkillComposer:
             title: Skill title
             description: Skill description
             sections: List of root sections
+            section_ids: Optional list of section IDs for source tracking
+            timestamp: Optional ISO timestamp for creation time
+            original_type: Optional FileType to preserve original component category
 
         Returns:
             YAML frontmatter as string (without delimiters)
@@ -284,7 +315,8 @@ class SkillComposer:
             title=title,
             description=description,
             sections=sections,
-            context=context
+            context=context,
+            original_type=original_type,
         )
 
     def _count_total_sections(self, sections: List[Section]) -> int:
@@ -323,7 +355,8 @@ class SkillComposer:
         title: str,
         description: str,
         sections: List[Section],
-        section_ids: List[int] = None
+        section_ids: List[int] = None,
+        original_type: Optional[FileType] = None,
     ) -> str:
         """
         Generate basic YAML frontmatter for composed skill (without enrichment).
@@ -333,11 +366,14 @@ class SkillComposer:
         - description
         - sections (count)
         - composed_from (source info)
+        - category (preserving original type)
 
         Args:
             title: Skill title
             description: Skill description
             sections: List of root sections
+            section_ids: Optional list of section IDs for source tracking
+            original_type: Optional FileType to preserve original component category
 
         Returns:
             YAML frontmatter as string (without delimiters)
@@ -351,6 +387,9 @@ class SkillComposer:
         # Slugify title for 'name' field
         name = self._slugify(title)
 
+        # Use original type for category, default to "composed"
+        category = original_type.value if original_type else "composed"
+
         # Count total sections (including children)
         section_count = sum(1 + len(s.children) for s in sections)
 
@@ -358,6 +397,7 @@ class SkillComposer:
         lines = [
             f"name: {name}",
             f"description: {description}",
+            f"category: {category}",
             f"sections: {section_count}",
         ]
 

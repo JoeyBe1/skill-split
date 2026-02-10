@@ -568,6 +568,395 @@ class TestDatabaseStoreFTS5:
         assert len(file_results) <= len(all_results)
 
 
+class TestFTS5QuerySyntax:
+    """Test FTS5 MATCH query syntax behavior."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def test_fts5_single_word(self):
+        """Single word query finds exact matches."""
+        from models import ParsedDocument, Section, FileType
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[Section(level=1, title="Python", content="Python code", line_start=1, line_end=2)],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/single.md"
+        )
+        self.store.store_file("/test/single.md", doc, "test_hash")
+
+        results = self.store.search_sections_with_rank("python")
+        assert len(results) > 0
+
+    def test_fts5_multi_word_implicit_and(self):
+        """Multi-word query with preprocessing uses OR (implicit AND for FTS5)."""
+        from models import ParsedDocument, Section, FileType
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Git", content="Repository", line_start=1, line_end=2),
+                Section(level=1, title="Python", content="Handler", line_start=3, line_end=4),
+                Section(level=1, title="Both", content="Git and Repository", line_start=5, line_end=6),
+            ],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/and.md"
+        )
+        self.store.store_file("/test/and.md", doc, "test_hash")
+
+        # With preprocessing, "git repository" → "git" OR "repository"
+        results = self.store.search_sections_with_rank("git repository")
+
+        # Should find sections with either word after preprocessing
+        assert len(results) >= 1
+
+    def test_fts5_or_query(self):
+        """OR query finds sections with either word."""
+        from models import ParsedDocument, Section, FileType
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Git", content="Version control", line_start=1, line_end=2),
+                Section(level=1, title="Repository", content="Code storage", line_start=3, line_end=4),
+            ],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/or.md"
+        )
+        self.store.store_file("/test/or.md", doc, "test_hash")
+
+        # "git OR repository" finds sections with either word
+        results = self.store.search_sections_with_rank("git OR repository")
+
+        # Should find both sections
+        assert len(results) >= 2
+
+    def test_fts5_empty_query(self):
+        """Empty query returns empty results."""
+        results = self.store.search_sections_with_rank("")
+        assert results == []
+
+
+class TestQueryPreprocessing:
+    """Test FTS5 query preprocessing logic."""
+
+    def test_empty_query(self):
+        """Empty query returns empty string."""
+        result = DatabaseStore.preprocess_fts5_query("")
+        assert result == ""
+
+    def test_whitespace_only(self):
+        """Whitespace-only query returns empty string."""
+        result = DatabaseStore.preprocess_fts5_query("   ")
+        assert result == ""
+
+    def test_single_word(self):
+        """Single word returns as-is."""
+        result = DatabaseStore.preprocess_fts5_query("python")
+        assert result == "python"
+
+    def test_multi_word_converts_to_or(self):
+        """Multi-word query converts to OR for discovery."""
+        result = DatabaseStore.preprocess_fts5_query("git setup")
+        assert result == '"git" OR "setup"'
+
+    def test_quoted_phrase_preserved(self):
+        """Quoted phrases are preserved for exact matching."""
+        result = DatabaseStore.preprocess_fts5_query('"git setup"')
+        assert result == '"git setup"'
+
+    def test_user_and_operator_respected(self):
+        """User-provided AND operator is respected."""
+        result = DatabaseStore.preprocess_fts5_query("git AND setup")
+        assert result == "git AND setup"
+
+    def test_user_or_operator_respected(self):
+        """User-provided OR operator is respected."""
+        result = DatabaseStore.preprocess_fts5_query("git OR setup")
+        assert result == "git OR setup"
+
+    def test_user_near_operator_respected(self):
+        """User-provided NEAR operator is respected."""
+        result = DatabaseStore.preprocess_fts5_query("git NEAR setup")
+        assert result == "git NEAR setup"
+
+    def test_case_insensitive_operators(self):
+        """Operator detection is case-insensitive."""
+        result1 = DatabaseStore.preprocess_fts5_query("git AND setup")
+        result2 = DatabaseStore.preprocess_fts5_query("git and setup")
+        assert "AND" in result1.upper()
+        assert result1 == result2
+
+    def test_extra_whitespace_normalized(self):
+        """Extra whitespace is normalized."""
+        result = DatabaseStore.preprocess_fts5_query("  git    setup  ")
+        assert result == '"git" OR "setup"'
+
+    def test_three_words_or_all(self):
+        """Three+ words use OR for all."""
+        result = DatabaseStore.preprocess_fts5_query("git setup repository")
+        assert result == '"git" OR "setup" OR "repository"'
+
+    def test_complex_query_preserved(self):
+        """Complex queries with operators are preserved."""
+        result = DatabaseStore.preprocess_fts5_query('git AND "setup repository" OR clone')
+        assert result == 'git AND "setup repository" OR clone'
+
+    def test_special_characters_in_words(self):
+        """Words with special characters are quoted."""
+        result = DatabaseStore.preprocess_fts5_query("c++ python")
+        assert '"c++"' in result
+        assert '"python"' in result
+
+    def test_preprocessing_in_search_sections_with_rank(self):
+        """search_sections_with_rank applies preprocessing."""
+        from models import ParsedDocument, Section, FileFormat
+
+        doc = ParsedDocument(
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Git", content="Version control", line_start=1, line_end=2),
+                Section(level=1, title="Setup", content="Initial configuration", line_start=3, line_end=4),
+            ],
+            file_type=FileType.SKILL,
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/preprocess.md"
+        )
+        self.store.store_file("/test/preprocess.md", doc, "test_hash")
+
+        # "git setup" → "git" OR "setup" should find both sections
+        results = self.store.search_sections_with_rank("git setup")
+
+        # With OR, should find sections with either word
+        assert len(results) >= 2
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+
+class TestFTS5Synchronization:
+    """Test FTS5 index synchronization with CRUD operations."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
+        self.temp_db.close()
+        self.store = DatabaseStore(self.temp_db.name)
+
+    def teardown_method(self):
+        """Clean up temporary database file."""
+        try:
+            os.unlink(self.temp_db.name)
+        except FileNotFoundError:
+            pass
+
+    def test_fts_sync_after_insert(self):
+        """FTS index contains newly inserted sections."""
+        from models import ParsedDocument, Section, FileFormat
+
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[Section(level=1, title="FTS Test", content="Searchable content", line_start=1, line_end=2)],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/fts_insert.md"
+        )
+        self.store.store_file("/test/fts_insert.md", doc, "hash")
+
+        # Search should find the new section
+        results = self.store.search_sections_with_rank("fts test")
+
+        assert len(results) > 0, "FTS index should contain new section"
+
+    def test_fts_sync_after_update(self):
+        """FTS index reflects updated section content."""
+        from models import ParsedDocument, Section, FileFormat
+
+        # Insert original
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[Section(level=1, title="Original", content="Original content", line_start=1, line_end=2)],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/fts_update.md"
+        )
+        self.store.store_file("/test/fts_update.md", doc, "hash1")
+
+        # Update with new content
+        doc2 = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[Section(level=1, title="Updated", content="Updated searchable text", line_start=1, line_end=2)],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/fts_update.md"
+        )
+        self.store.store_file("/test/fts_update.md", doc2, "hash2")
+
+        # Search for new content
+        results = self.store.search_sections_with_rank("updated searchable")
+
+        assert len(results) > 0, "FTS index should reflect updated content"
+
+    def test_fts_cleanup_after_delete(self):
+        """Deleting file removes FTS entries (no orphans)."""
+        from models import ParsedDocument, Section, FileFormat
+        import sqlite3
+
+        # Insert file
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[
+                Section(level=1, title="Delete Test", content="To be deleted", line_start=1, line_end=2),
+                Section(level=2, title="Child", content="Also deleted", line_start=3, line_end=4),
+            ],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/fts_delete.md"
+        )
+        file_id = self.store.store_file("/test/fts_delete.md", doc, "hash")
+
+        # Verify FTS has entries
+        results_before = self.store.search_sections_with_rank("delete test")
+        assert len(results_before) > 0
+
+        # Delete file
+        result = self.store.delete_file(file_id)
+        assert result is True
+
+        # Search should find nothing
+        results_after = self.store.search_sections_with_rank("delete test")
+        assert len(results_after) == 0, "FTS entries should be removed after delete"
+
+    def test_no_orphaned_fts_entries(self):
+        """No orphaned FTS entries after operations."""
+        from models import ParsedDocument, Section, FileFormat
+        import sqlite3
+
+        # Insert and delete multiple files
+        for i in range(5):
+            doc = ParsedDocument(
+                file_type=FileType.SKILL,
+                frontmatter="",
+                sections=[Section(level=1, title=f"Test {i}", content=f"Content {i}", line_start=1, line_end=2)],
+                format=FileFormat.MARKDOWN_HEADINGS,
+                original_path=f"/test/orphan_{i}.md"
+            )
+            file_id = self.store.store_file(f"/test/orphan_{i}.md", doc, f"hash{i}")
+            self.store.delete_file(file_id)
+
+        # Check for orphans
+        with sqlite3.connect(self.store.db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*) FROM sections_fts
+                WHERE rowid NOT IN (SELECT id FROM sections)
+                """
+            )
+            orphaned = cursor.fetchone()[0]
+
+        assert orphaned == 0, f"Should have no orphaned FTS entries, found {orphaned}"
+
+    def test_fts_sync_after_cascade_delete(self):
+        """CASCADE delete of sections triggers FTS cleanup."""
+        from models import ParsedDocument, Section, FileFormat
+
+        # Create file with nested sections
+        doc = ParsedDocument(
+            file_type=FileType.SKILL,
+            frontmatter="",
+            sections=[
+                Section(
+                    level=1, title="Parent", content="Parent content", line_start=1, line_end=4,
+                    children=[
+                        Section(level=2, title="Child 1", content="Child 1 content", line_start=2, line_end=3),
+                        Section(level=2, title="Child 2", content="Child 2 content", line_start=3, line_end=4),
+                    ]
+                )
+            ],
+            format=FileFormat.MARKDOWN_HEADINGS,
+            original_path="/test/cascade.md"
+        )
+        file_id = self.store.store_file("/test/cascade.md", doc, "hash")
+
+        # Verify all sections searchable
+        results = self.store.search_sections_with_rank("child")
+        assert len(results) == 2
+
+        # Delete file (CASCADE deletes all sections)
+        self.store.delete_file(file_id)
+
+        # No sections should be found
+        results = self.store.search_sections_with_rank("child")
+        assert len(results) == 0
+
+    def test_fts_integrity_after_bulk_operations(self):
+        """FTS index remains consistent after bulk insert/delete."""
+        from models import ParsedDocument, Section, FileFormat
+        import sqlite3
+
+        # Bulk insert 10 files
+        file_ids = []
+        for i in range(10):
+            doc = ParsedDocument(
+                file_type=FileType.SKILL,
+                frontmatter="",
+                sections=[Section(level=1, title=f"Bulk {i}", content=f"Content {i}", line_start=1, line_end=2)],
+                format=FileFormat.MARKDOWN_HEADINGS,
+                original_path=f"/test/bulk_{i}.md"
+            )
+            file_id = self.store.store_file(f"/test/bulk_{i}.md", doc, f"hash{i}")
+            file_ids.append(file_id)
+
+        # Verify FTS has all entries
+        with sqlite3.connect(self.store.db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM sections_fts")
+            fts_count = cursor.fetchone()[0]
+
+            cursor = conn.execute("SELECT COUNT(*) FROM sections")
+            sections_count = cursor.fetchone()[0]
+
+        assert fts_count == sections_count, "FTS count should match sections count"
+
+        # Delete all files
+        for file_id in file_ids:
+            self.store.delete_file(file_id)
+
+        # Verify both tables are empty
+        with sqlite3.connect(self.store.db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM sections_fts")
+            fts_count = cursor.fetchone()[0]
+
+            cursor = conn.execute("SELECT COUNT(*) FROM sections")
+            sections_count = cursor.fetchone()[0]
+
+        assert fts_count == 0
+        assert sections_count == 0
+
+
 def run_tests():
     """Run all tests."""
     import traceback
@@ -579,6 +968,9 @@ def run_tests():
         TestCascadeDelete,
         TestGetSectionTree,
         TestDatabaseStoreFTS5,
+        TestFTS5QuerySyntax,
+        TestQueryPreprocessing,
+        TestFTS5Synchronization,
     ]
 
     passed = 0

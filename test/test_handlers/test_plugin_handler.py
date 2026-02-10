@@ -109,7 +109,7 @@ class TestPluginHandler:
 
         assert doc.file_type == FileType.PLUGIN
         assert doc.format == FileFormat.MULTI_FILE
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 2  # metadata + permissions
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "test-plugin" in doc.frontmatter
 
@@ -118,7 +118,7 @@ class TestPluginHandler:
         handler = PluginHandler(plugin_with_mcp)
         doc = handler.parse()
 
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 2  # metadata + mcp_config
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "test-plugin" in doc.frontmatter
         assert "mcpServers" in doc.frontmatter
@@ -128,7 +128,7 @@ class TestPluginHandler:
         handler = PluginHandler(plugin_with_hooks)
         doc = handler.parse()
 
-        assert len(doc.sections) == 0  # No sections - original JSON stored in frontmatter
+        assert len(doc.sections) == 2  # metadata + hooks
         assert doc.frontmatter  # Frontmatter contains original JSON
         assert "test-plugin" in doc.frontmatter
         assert "hooks" in doc.frontmatter

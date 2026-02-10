@@ -144,6 +144,7 @@ class Parser:
         start_idx: int,
         parent_level: Optional[int],
         orphaned_content: Optional[str] = None,
+        line_offset: int = 0,
     ) -> List[Section]:
         """
         Parse lines into sections, respecting parent level for nesting.
@@ -153,6 +154,7 @@ class Parser:
             start_idx: Starting index in lines
             parent_level: The heading level of parent (None for top-level)
             orphaned_content: Content that appeared before the first heading (top-level only)
+            line_offset: Absolute line number offset for recursive calls
 
         Returns:
             List of Section objects
@@ -168,8 +170,8 @@ class Parser:
                 level=0,  # level=0 indicates orphaned/intro content
                 title="",  # No title for orphaned content
                 content=orphaned_content,
-                line_start=1,  # Always starts at line 1
-                line_end=orphaned_content.count('\n') + 1,
+                line_start=1 + line_offset,  # Always starts at line 1 + offset
+                line_end=orphaned_content.count('\n') + 1 + line_offset,
             ))
 
         while i < len(lines):
@@ -200,7 +202,7 @@ class Parser:
                         break
 
                     # Extract content for this section (excluding child sections)
-                    section_start = i + 1  # 1-based
+                    section_start = i + 1  # 1-based index in current lines
                     content_lines = []
                     i += 1
 
@@ -255,14 +257,18 @@ class Parser:
                         level=level,
                         title=title,
                         content="".join(content_lines),
-                        line_start=section_start,
-                        line_end=i,  # i is now at next heading or end
+                        line_start=section_start + line_offset,
+                        line_end=i + line_offset,  # i is now at next heading or end
                     )
 
                     # Recursively parse children from child lines only
                     if child_lines:
+                        # Calculate new offset: current offset + start of children in lines
+                        child_offset_in_lines = (section_start - 1) + child_heading_indices[0]
+                        new_offset = line_offset + child_offset_in_lines
+                        
                         children = self._parse_heading_lines(
-                            child_lines, 0, level
+                            child_lines, 0, level, None, new_offset
                         )
                         section.children = children
                         for child in children:
@@ -281,6 +287,7 @@ class Parser:
         lines: List[str],
         start_idx: int,
         parent_tag: Optional[str],
+        line_offset: int = 0,
     ) -> List[Section]:
         """
         Parse lines into XML tag sections, respecting parent tag for nesting.
@@ -289,6 +296,7 @@ class Parser:
             lines: All lines to parse
             start_idx: Starting index in lines
             parent_tag: The tag name of parent (None for top-level)
+            line_offset: Absolute line number offset
 
         Returns:
             List of Section objects with level=-1 for XML tags
@@ -370,15 +378,18 @@ class Parser:
                     level=-1,  # -1 indicates XML tag format
                     title=tag_name,
                     content="".join(content_lines),
-                    line_start=section_start,
-                    line_end=i + 1,  # i is at closing tag
+                    line_start=section_start + line_offset,
+                    line_end=i + 1 + line_offset,  # i is at closing tag
                     closing_tag_prefix=closing_tag_prefix,
                 )
 
                 # Recursively parse children from child lines only
                 if child_lines:
+                    child_offset_in_lines = section_start + child_tag_indices[0]
+                    new_offset = line_offset + child_offset_in_lines
+                    
                     children = self._parse_xml_tag_lines(
-                        child_lines, 0, tag_name
+                        child_lines, 0, tag_name, new_offset
                     )
                     section.children = children
                     for child in children:

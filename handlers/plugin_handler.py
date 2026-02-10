@@ -9,7 +9,7 @@ A plugin consists of:
 
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from handlers.base import BaseHandler
 from models import ParsedDocument, Section, FileType, FileFormat, ValidationResult
@@ -31,25 +31,76 @@ class PluginHandler(BaseHandler):
 
     def parse(self) -> ParsedDocument:
         """
-        Parse plugin.json - store original content for byte-perfect reconstruction.
+        Parse plugin.json while preserving byte-perfect original content.
 
-        For plugin.json files, we store the original JSON content as-is without
-        creating sections. This ensures byte-perfect round-trip reconstruction.
-
-        Returns:
-            ParsedDocument with original JSON content (no sections)
-
-        Raises:
-            json.JSONDecodeError: If plugin.json is invalid
+        We store the original JSON exactly in frontmatter for exact
+        round-trip reconstruction, AND generate sections for progressive
+        disclosure (metadata, mcp_config, hooks, permissions).
         """
-        # Validate JSON structure
         plugin_data = json.loads(self.content)
+        sections: List[Section] = []
 
-        # Store original JSON exactly in frontmatter field (no sections)
-        # Recomposer will return frontmatter as-is for FileType.PLUGIN with no sections
+        # Metadata section
+        name = plugin_data.get("name", "unknown")
+        version = plugin_data.get("version", "unknown")
+        description = plugin_data.get("description", "")
+        author = plugin_data.get("author")
+
+        metadata_lines = [f"# {name}", f"**Version**: {version}"]
+        if description:
+            metadata_lines.append(f"**Description**: {description}")
+        if author:
+            metadata_lines.append(f"**Author**: {author}")
+        metadata_content = "\n".join(metadata_lines).strip() + "\n"
+
+        sections.append(Section(
+            level=1,
+            title="metadata",
+            content=metadata_content,
+            line_start=1,
+            line_end=len(metadata_content.splitlines()),
+        ))
+
+        # Permissions section (optional)
+        permissions = plugin_data.get("permissions")
+        if isinstance(permissions, list) and permissions:
+            permission_lines = ["## Permissions"] + [f"- {p}" for p in permissions]
+            permissions_content = "\n".join(permission_lines).strip() + "\n"
+            sections.append(Section(
+                level=1,
+                title="permissions",
+                content=permissions_content,
+                line_start=1,
+                line_end=len(permissions_content.splitlines()),
+            ))
+
+        # MCP config section (optional)
+        mcp_file = self._find_mcp_config()
+        if mcp_file:
+            mcp_content = mcp_file.read_text()
+            sections.append(Section(
+                level=1,
+                title="mcp_config",
+                content=mcp_content,
+                line_start=1,
+                line_end=len(mcp_content.splitlines()),
+            ))
+
+        # Hooks section (optional)
+        hooks_file = self._find_hooks_config()
+        if hooks_file:
+            hooks_content = hooks_file.read_text()
+            sections.append(Section(
+                level=1,
+                title="hooks",
+                content=hooks_content,
+                line_start=1,
+                line_end=len(hooks_content.splitlines()),
+            ))
+
         return ParsedDocument(
             frontmatter=self.content,  # Store original JSON exactly
-            sections=[],                # No sections - preserve as single unit
+            sections=sections,
             file_type=FileType.PLUGIN,
             format=FileFormat.MULTI_FILE,
             original_path=self.file_path,
@@ -148,7 +199,7 @@ class PluginHandler(BaseHandler):
         """Return FileFormat.MULTI_FILE for plugins."""
         return FileFormat.MULTI_FILE
 
-    def _find_mcp_config(self) -> Path | None:
+    def _find_mcp_config(self) -> Optional[Path]:
         """
         Find .mcp.json file in plugin directory.
 
@@ -167,7 +218,7 @@ class PluginHandler(BaseHandler):
 
         return None
 
-    def _find_hooks_config(self) -> Path | None:
+    def _find_hooks_config(self) -> Optional[Path]:
         """
         Find hooks.json file in plugin directory.
 

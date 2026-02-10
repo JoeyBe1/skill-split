@@ -1,0 +1,148 @@
+DOCUMENTATION CLEANUP MANIFEST
+==============================
+Generated: 2026-02-06
+
+TOTAL FILES: 62 MD files
+
+KEEP (18 files) - USER-FACING DOCUMENTATION
+==============================================
+
+Core User Docs (8):
+  1. README.md
+  2. CLAUDE.md
+  3. CODEX.md
+  4. AGENT.md
+  5. EXAMPLES.md
+  6. DEPLOYMENT_STATUS.md
+  7. DEPLOYMENT_CHECKLIST.md
+
+Feature Docs (6):
+  8. COMPONENT_COMPOSITION.md
+  9. COMPONENT_HANDLERS.md
+  10. HANDLER_INTEGRATION.md
+  11. VECTOR_SEARCH_GUIDE.md
+  12. SUPABASE_SETUP.md
+  13. INGESTION_GUIDE.md
+
+Technical References (4):
+  14. migrations/SCHEMA_MIGRATION_GUIDE.md
+  15. test/MANUAL_ROUNDTRIP_TEST.md
+  16. docs/VECTOR_SEARCH_COSTS.md
+  17. demo/sample_skill.md
+  18. (implied: .pytest_cache/README.md - auto-generated, keep as-is)
+
+
+ARCHIVE (44 files) - DEVELOPMENT HISTORY
+========================================
+
+Wave Reports (8) → .archive/wave-reports/
+  1. WAVE_3_CODE_REFERENCE.md
+  2. WAVE_3_COMPLETION_REPORT.md
+  3. WAVE_4_COMPLETION.md
+  4. WAVE_5_COMPLETION.md
+  5. WAVE_6_COMPLETION_REPORT.md
+  6. WAVE_6_IMPLEMENTATION_CHECKLIST.md
+  7. WAVE_8_COMPLETION_REPORT.md
+  8. WAVE_8_SUMMARY.md
+
+Phase Plans (9) → .archive/phase-plans/
+  1. PHASE_10_CLOSURE_PLAN.md
+  2. PHASE_10_GAP_ANALYSIS.md
+  3. PHASE_11_DELIVERY.md
+  4. PHASE_11_FOUNDATION.md
+  5. PHASE_11_INDEX.md
+  6. PHASE_11_OVERVIEW.md
+  7. PHASE_11_QUICK_START.md
+  8. PHASE_14_DELIVERY.md
+  9. PHASE_14_IMPLEMENTATION_READY.md
+
+Task Reports (5) → .archive/task-reports/
+  1. HAIKU_EXECUTION_TASKLIST.md
+  2. FINAL_GAP_CLOSURE_TASKS.md
+  3. TASK-011-COMPLETION.md
+  4. TASK-011-TEST-REPORT.md
+  5. TEST_EXECUTION_SUMMARY.md
+
+Roundtrip Testing (6) → .archive/testing-docs/
+  1. ROUNDTRIP_DELIVERY.md
+  2. ROUNDTRIP_QUICK_REFERENCE.md
+  3. ROUNDTRIP_TESTING_SUMMARY.md
+  4. ROUNDTRIP_VERIFICATION_REPORT.md
+  5. START_HERE_ROUNDTRIP.md
+  6. TEST_ROUNDTRIP_README.md
+
+Test Reports (4) → .archive/test-reports/
+  1. COMPREHENSIVE_TEST_REPORT.md
+  2. REAL_COMPONENT_TEST_REPORT.md
+  3. REAL_FILE_TEST_REPORT.md
+  4. SKILL_COMPOSITION_TEST_REPORT.md
+
+Investigations (8) → .archive/investigations/
+  1. DB_COUNT_INVESTIGATION.md
+  2. FOLDER_RECREATION_INVESTIGATION.md
+  3. SYNC_STATUS.md
+  4. SYNC_VERIFICATION.md
+  5. ARCHITECTURE_COMPARISON.md
+  6. COMPOSITION_INDEX.md
+  7. COMPOSITION_CAPABILITY_SUMMARY.md
+  8. HANDLER_FIXES_2026_02_04.md
+
+Strategy Docs (4) → .archive/strategy-docs/
+  1. IMPLEMENTATION_COMPLETE.md
+  2. PRODUCTION_TEST_PLAN.md
+  3. SESSION_SUMMARY.md
+  4. HANDOFF.md
+
+User Guides (5) → .archive/user-guides/
+  1. JOEY_GUIDE.md
+  2. LIBRARIAN_WORKFLOW.md
+  3. RALPH_USAGE.md
+  4. IDEAS.md
+  5. ARCHITECTURE.md
+
+
+IMPLEMENTATION COMMANDS
+======================
+
+# Create archive structure
+mkdir -p .archive/{wave-reports,phase-plans,task-reports,testing-docs,test-reports,investigations,strategy-docs,user-guides}
+
+# Move wave reports
+mv WAVE_*.md .archive/wave-reports/
+
+# Move phase plans
+mv PHASE_*.md .archive/phase-plans/
+
+# Move task reports
+mv HAIKU_EXECUTION_TASKLIST.md FINAL_GAP_CLOSURE_TASKS.md TASK-011-*.md TEST_EXECUTION_SUMMARY.md .archive/task-reports/
+
+# Move roundtrip tests
+mv ROUNDTRIP_*.md START_HERE_ROUNDTRIP.md TEST_ROUNDTRIP_README.md .archive/testing-docs/
+
+# Move test reports
+mv COMPREHENSIVE_TEST_REPORT.md REAL_COMPONENT_TEST_REPORT.md REAL_FILE_TEST_REPORT.md SKILL_COMPOSITION_TEST_REPORT.md .archive/test-reports/
+
+# Move investigations
+mv DB_COUNT_INVESTIGATION.md FOLDER_RECREATION_INVESTIGATION.md SYNC_*.md ARCHITECTURE_COMPARISON.md COMPOSITION_*.md HANDLER_FIXES_2026_02_04.md .archive/investigations/
+
+# Move strategy docs
+mv IMPLEMENTATION_COMPLETE.md PRODUCTION_TEST_PLAN.md SESSION_SUMMARY.md HANDOFF.md .archive/strategy-docs/
+
+# Move guides
+mv JOEY_GUIDE.md LIBRARIAN_WORKFLOW.md RALPH_USAGE.md IDEAS.md ARCHITECTURE.md .archive/user-guides/
+
+
+RESULTS
+=======
+
+Before:  62 files in root (clutter)
+After:   18 files in root (clean) + 44 in .archive/ (preserved)
+
+Kept for users:     README, CLAUDE, CODEX, AGENT, EXAMPLES, DEPLOYMENT_STATUS,
+                    DEPLOYMENT_CHECKLIST, component guides, supabase setup,
+                    vector search, ingestion, schema migration
+
+Archived for history: All wave/phase/task reports, tests, investigations,
+                      strategy docs, user guides
+
+Impact: Much cleaner repo for new users; full history preserved; easy restore if needed
