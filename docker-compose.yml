@@ -1,0 +1,67 @@
+# skill-split Docker Compose
+# Development and production configurations
+
+version: '3.8'
+
+services:
+  # Development service
+  skill-split-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: skill-split-dev
+    volumes:
+      - .:/workspace
+      - skill-split-db:/data
+    working_dir: /workspace
+    environment:
+      - PYTHONPATH=/workspace
+      - SKILL_SPLIT_DB=/data/skill_split.db
+      - ENABLE_EMBEDDINGS=false
+    command: tail -f /dev/null
+    ports:
+      - "8000:8000"
+
+  # Production service
+  skill-split-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skill-split-prod
+    volumes:
+      - skill-split-db:/data
+      - ./docs:/docs:ro
+    environment:
+      - SKILL_SPLIT_DB=/data/skill_split.db
+      - ENABLE_EMBEDDINGS=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from core.database import Database; db = Database(); exit(0 if db.conn else 1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Test service
+  skill-split-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: skill-split-test
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      - PYTHONPATH=/workspace
+    command: python -m pytest test/ -v
+
+volumes:
+  skill-split-db:
+    driver: local
+
+networks:
+  default:
+    name: skill-split-network
