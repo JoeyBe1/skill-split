@@ -491,11 +491,6 @@ class SkillComposer:
 
             # Rebuild sections content (simple hierarchical reconstruction)
             sections_list = list(composed.sections.values())
-            # Debug: Print hierarchy
-            # print("DEBUG: Rebuilding content from sections:")
-            # for s in sections_list:
-            #     if not s.parent:
-            #         print(f"Root: {s.title} (Children: {len(s.children)})")
 
             # Note: sections_list here is the dictionary values (flat list of all sections).
             # But we need the hierarchical root sections!
