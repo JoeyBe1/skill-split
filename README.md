@@ -351,6 +351,44 @@ Output:
 
 ---
 
+### Restore Command
+
+```bash
+./skill_split.py restore <backup_file> [--db <path>] [--overwrite]
+```
+
+**Description**: Restores a database from a backup file with integrity validation.
+
+**Arguments**:
+- `backup_file`: Path to the backup file (.sql.gz) or backup filename
+- `--db`: (Optional) Path to target database (default: skill_split.db)
+- `--overwrite`: (Optional) Overwrite existing database if it exists
+
+**Output**: Restoration statistics including records restored, tables restored, and integrity check status
+
+**Examples**:
+```bash
+# Restore from backup file
+./skill_split.py restore ~/.claude/backups/skill-split-20260210-123456.sql.gz
+
+# Restore using just filename (searches backup directory)
+./skill_split.py restore skill-split-20260210-123456
+
+# Restore to specific database
+./skill_split.py restore backup.sql.gz --db ~/.claude/databases/skill-split.db
+
+# Overwrite existing database
+./skill_split.py restore backup.sql.gz --overwrite
+```
+
+**Notes**:
+- Requires `--overwrite` flag if target database already exists
+- Runs `PRAGMA integrity_check` after restoration
+- FTS5 virtual tables are automatically recreated
+- Returns restoration statistics: records_restored, tables_restored, integrity_check_passed
+
+---
+
 ## Search & Navigation
 
 skill-split provides THREE search modes for different use cases, plus progressive disclosure navigation for token-efficient content access.
