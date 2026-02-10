@@ -1,0 +1,107 @@
+{
+  "name": "auto_tagger",
+  "version": "1.0.0",
+  "description": "Automatically suggests and manages tags for documentation",
+  "author": "skill-split",
+  "main": "main.py",
+  "type": "transformer",
+  "dependencies": {
+    "skill-split": ">=1.0",
+    "python": ">=3.9"
+  },
+  "commands": {
+    "suggest": {
+      "description": "Suggest tags for a document",
+      "arguments": ["file_path"],
+      "options": {
+        "count": {
+          "description": "Number of tags to suggest",
+          "type": "integer",
+          "default": 10
+        },
+        "output": {
+          "description": "Output format (json, text)",
+          "type": "string",
+          "default": "text"
+        }
+      }
+    },
+    "update": {
+      "description": "Update document frontmatter with tags",
+      "arguments": ["file_path"],
+      "options": {
+        "tags": {
+          "description": "Comma-separated list of tags",
+          "type": "string"
+        },
+        "force": {
+          "description": "Overwrite existing tags",
+          "type": "boolean",
+          "default": false
+        },
+        "backup": {
+          "description": "Create backup before updating",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "extract": {
+      "description": "Extract keywords from content",
+      "arguments": ["file_path"],
+      "options": {
+        "count": {
+          "description": "Number of keywords to extract",
+          "type": "integer",
+          "default": 5
+        }
+      }
+    },
+    "stats": {
+      "description": "Show tag statistics for database",
+      "arguments": [],
+      "options": {
+        "database": {
+          "description": "Path to skill-split database",
+          "type": "string",
+          "default": "./skill_split.db"
+        },
+        "top": {
+          "description": "Number of top tags to show",
+          "type": "integer",
+          "default": 20
+        }
+      }
+    },
+    "similar": {
+      "description": "Find documents with similar tags",
+      "arguments": ["file_path"],
+      "options": {
+        "limit": {
+          "description": "Number of similar documents to return",
+          "type": "integer",
+          "default": 5
+        }
+      }
+    }
+  },
+  "hooks": {
+    "post-parse": "extract_tags_after_parse"
+  },
+  "config": {
+    "min_tag_length": 3,
+    "max_tag_length": 30,
+    "stop_words": [
+      "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+      "of", "with", "by", "from", "as", "is", "was", "are", "were", "be",
+      "been", "being", "have", "has", "had", "do", "does", "did", "will",
+      "would", "could", "should", "may", "might", "must", "shall", "can"
+    ],
+    "tag_categories": {
+      "technology": ["python", "javascript", "typescript", "java", "go", "rust"],
+      "framework": ["react", "vue", "angular", "django", "flask", "fastapi"],
+      "tool": ["git", "docker", "kubernetes", "terraform", "ansible"],
+      "concept": ["api", "database", "authentication", "testing", "deployment"]
+    }
+  }
+}

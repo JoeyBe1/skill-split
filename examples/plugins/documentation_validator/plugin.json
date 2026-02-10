@@ -1,0 +1,66 @@
+{
+  "name": "documentation_validator",
+  "version": "1.0.0",
+  "description": "Validates markdown documentation structure and integrity",
+  "author": "skill-split",
+  "main": "main.py",
+  "type": "validator",
+  "dependencies": {
+    "skill-split": ">=1.0",
+    "python": ">=3.9"
+  },
+  "commands": {
+    "validate": {
+      "description": "Validate a single document",
+      "arguments": ["file_path"],
+      "options": {
+        "strict": {
+          "description": "Enable strict validation mode",
+          "type": "boolean",
+          "default": false
+        },
+        "output": {
+          "description": "Output format (json, text, html)",
+          "type": "string",
+          "default": "text"
+        }
+      }
+    },
+    "validate-all": {
+      "description": "Validate all documents in database",
+      "arguments": [],
+      "options": {
+        "database": {
+          "description": "Path to skill-split database",
+          "type": "string",
+          "default": "./skill_split.db"
+        }
+      }
+    },
+    "report": {
+      "description": "Generate validation report",
+      "arguments": ["target"],
+      "options": {
+        "suggest": {
+          "description": "Include fix suggestions",
+          "type": "boolean",
+          "default": false
+        },
+        "output": {
+          "description": "Output file path",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "hooks": {
+    "post-parse": "validate_after_parse",
+    "pre-store": "validate_before_store"
+  },
+  "config": {
+    "max_heading_depth": 6,
+    "require_frontmatter": true,
+    "check_external_links": true,
+    "link_timeout": 10
+  }
+}

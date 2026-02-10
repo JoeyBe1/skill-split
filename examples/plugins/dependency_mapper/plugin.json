@@ -1,0 +1,98 @@
+{
+  "name": "dependency_mapper",
+  "version": "1.0.0",
+  "description": "Maps cross-references and dependencies between documentation sections",
+  "author": "skill-split",
+  "main": "main.py",
+  "type": "analyzer",
+  "dependencies": {
+    "skill-split": ">=1.0",
+    "python": ">=3.9"
+  },
+  "commands": {
+    "map": {
+      "description": "Map dependencies within a document",
+      "arguments": ["file_path"],
+      "options": {
+        "output": {
+          "description": "Output format (text, json, dot)",
+          "type": "string",
+          "default": "text"
+        },
+        "include-external": {
+          "description": "Include external links in map",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "circular": {
+      "description": "Find circular dependency references",
+      "arguments": ["file_path"],
+      "options": {
+        "output": {
+          "description": "Output format (text, json)",
+          "type": "string",
+          "default": "text"
+        }
+      }
+    },
+    "orphans": {
+      "description": "Find unreferenced orphan sections",
+      "arguments": ["file_path"],
+      "options": {
+        "output": {
+          "description": "Output format (text, json)",
+          "type": "string",
+          "default": "text"
+        }
+      }
+    },
+    "graph": {
+      "description": "Generate dependency graph visualization",
+      "arguments": ["file_path"],
+      "options": {
+        "format": {
+          "description": "Graph format (dot, mermaid, json)",
+          "type": "string",
+          "default": "dot"
+        },
+        "output": {
+          "description": "Output file path",
+          "type": "string"
+        }
+      }
+    },
+    "cross-db": {
+      "description": "Analyze cross-database dependencies",
+      "arguments": ["database_path"],
+      "options": {
+        "format": {
+          "description": "Output format (text, json)",
+          "type": "string",
+          "default": "text"
+        }
+      }
+    },
+    "analyze": {
+      "description": "Full dependency analysis",
+      "arguments": ["file_path"],
+      "options": {
+        "report": {
+          "description": "Generate detailed report",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  },
+  "hooks": {
+    "post-parse": "map_dependencies_after_parse"
+  },
+  "config": {
+    "max_depth": 50,
+    "detect_circular": true,
+    "include_orphans": true,
+    "graph_engine": "dot"
+  }
+}
