@@ -1,0 +1,54 @@
+@startuml Search Architecture
+!theme plain
+
+package "Tier 1: BM25 Keywords" {
+    [User Query] as Query
+    [Query Preprocessor] as Preproc
+    [FTS5 Full-Text] as FTS5
+    [BM25 Ranking] as BM25
+}
+
+package "Tier 2: Vector Search" {
+    [Embedding Service] as Embed
+    [Supabase pgvector] as Supa
+    [Cosine Similarity] as Cosine
+}
+
+package "Tier 3: Hybrid Fusion" {
+    [Score Normalizer] as Normalize
+    [Weighted Average] as Weight
+    [Final Ranking] as Rank
+}
+
+Query --> Preproc
+Preproc --> FTS5
+FTS5 --> BM25
+Query --> Embed
+Embed --> Supa
+Supa --> Cosine
+BM25 --> Normalize
+Cosine --> Normalize
+Normalize --> Weight
+Weight --> Rank
+
+note right of BM25
+  Fast keyword matching
+  No API key required
+  ~10ms latency
+end note
+
+note right of Cosine
+  Semantic similarity
+  Requires OpenAI API
+  ~100ms latency
+end note
+
+note bottom of Rank
+  hybrid_score =
+    (vector_weight × vector_similarity) +
+    ((1 - vector_weight) × text_score)
+
+  Default: vector_weight = 0.7
+end note
+
+@enduml

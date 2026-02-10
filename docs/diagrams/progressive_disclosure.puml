@@ -1,0 +1,66 @@
+@startuml Progressive Disclosure State Machine
+!theme plain
+
+[*] --> Search : User enters query
+
+state Search {
+  [*] --> QueryReceived
+  QueryReceived --> FTS5Search : Local DB
+  QueryReceived --> VectorSearch : Cloud DB
+  FTS5Search --> MergeResults
+  VectorSearch --> MergeResults
+  MergeResults --> RankedResults
+  RankedResults --> [*]
+}
+
+Search --> Results : Ranked sections
+
+state "Load Section" as LoadSection {
+  [*] --> GetSection
+  GetSection --> ValidateID
+  ValidateID --> FetchSection
+  ValidateID --> [*] : Not found
+  FetchSection --> PopulateSection
+  PopulateSection --> [*]
+}
+
+Results --> LoadSection : User selects section
+
+LoadSection --> DisplayContent : Show section content
+
+state DisplayContent {
+  [*] --> RenderContent
+  RenderContent --> ShowMetadata
+  ShowMetadata --> [*]
+}
+
+DisplayContent --> Next : User wants next section
+
+state "Navigate Next" as Next {
+  [*] --> CheckNavigation
+  CheckNavigation --> HasChild : Drill down?
+  CheckNavigation --> NextSibling : Next sibling?
+  HasChild --> LoadChildSection
+  NextSibling --> LoadNextSection
+  LoadChildSection --> [*]
+  LoadNextSection --> [*]
+}
+
+Next --> LoadSection : Load identified section
+
+DisplayContent --> [*] : User satisfied
+
+note right of Search
+  Three search modes:
+  - BM25 (Keywords)
+  - Vector (Semantic)
+  - Hybrid (Combined)
+end note
+
+note left of DisplayContent
+  Average section size:
+  204 tokens (99% savings
+  vs 21,000 token file)
+end note
+
+@enduml

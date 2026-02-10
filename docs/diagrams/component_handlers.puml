@@ -1,0 +1,92 @@
+@startuml Component Handlers
+!theme plain
+
+abstract class BaseHandler {
+  {abstract} parse() : ParsedDocument
+  {abstract} validate() : ValidationResult
+  {abstract} get_file_type() : FileType
+  {abstract} get_file_format() : FileFormat
+  get_related_files() : List[str]
+}
+
+class PluginHandler {
+  - plugin_path: str
+  parse() : ParsedDocument
+  _parse_plugin_json() : dict
+  _extract_hooks() : List[Hook]
+  _find_related_files() : List[str]
+}
+
+class HookHandler {
+  - hooks_path: str
+  parse() : ParsedDocument
+  _parse_hooks_json() : dict
+  _extract_shell_scripts() : List[Section]
+  _validate_script_syntax() : bool
+}
+
+class ConfigHandler {
+  - config_path: str
+  parse() : ParsedDocument
+  _parse_settings_json() : dict
+  _parse_mcp_config() : dict
+  _validate_schema() : bool
+}
+
+class ScriptHandler {
+  {abstract} parse() : ParsedDocument
+  {abstract} _extract_functions() : List[Section]
+  {abstract} _extract_classes() : List[Section]
+}
+
+class PythonHandler {
+  parse() : ParsedDocument
+  _extract_classes() : List[Section]
+  _extract_functions() : List[Section]
+  _extract_methods() : List[Section]
+}
+
+class JavaScriptHandler {
+  parse() : ParsedDocument
+  _extract_functions() : List[Section]
+  _extract_classes() : List[Section]
+  _extract_exports() : List[Section]
+}
+
+class TypeScriptHandler {
+  parse() : ParsedDocument
+  _extract_interfaces() : List[Section]
+  _extract_types() : List[Section]
+  _extract_classes() : List[Section]
+}
+
+class ShellHandler {
+  parse() : ParsedDocument
+  _extract_functions() : List[Section]
+  _extract_heredocs() : List[Section]
+}
+
+BaseHandler <|-- PluginHandler
+BaseHandler <|-- HookHandler
+BaseHandler <|-- ConfigHandler
+BaseHandler <|-- ScriptHandler
+ScriptHandler <|-- PythonHandler
+ScriptHandler <|-- JavaScriptHandler
+ScriptHandler <|-- TypeScriptHandler
+ScriptHandler <|-- ShellHandler
+
+note right of PluginHandler
+  Multi-file support:
+  - plugin.json
+  - .mcp.json
+  - hooks.json
+  - Shell scripts
+end note
+
+note bottom of ScriptHandler
+  Language-specific
+  function and class
+  extraction
+end note
+
+@enduml

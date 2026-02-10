@@ -1,0 +1,64 @@
+@startuml Database Schema
+!theme plain
+
+entity "FILES" as files {
+  *id : INTEGER <<generated>>
+  --
+  *path : TEXT
+  *type : TEXT
+  frontmatter : TEXT
+  hash : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "SECTIONS" as sections {
+  *id : INTEGER <<generated>>
+  --
+  *file_id : INTEGER
+  parent_id : INTEGER
+  *level : INTEGER
+  *title : TEXT
+  *content : TEXT
+  *order_index : INTEGER
+  *line_start : INTEGER
+  *line_end : INTEGER
+  closing_tag_prefix : TEXT
+}
+
+entity "SECTIONS_FTS" as sections_fts {
+  *rowid : INTEGER
+  --
+  *title : TEXT
+  *content : TEXT
+}
+
+entity "CHECKOUTS" as checkouts {
+  *id : INTEGER <<generated>>
+  --
+  *file_id : TEXT
+  *user_name : TEXT
+  *target_path : TEXT
+  *status : TEXT
+  checked_out_at : TIMESTAMP
+  checked_in_at : TIMESTAMP
+}
+
+files ||..o{ sections : "contains"
+sections ||..o{ sections : "parent_child"
+sections ||..o|| sections_fts : "fulltext_index"
+files ||..o{ checkouts : "tracks"
+
+note left of sections_fts
+  FTS5 External Content Table
+  Automatically synchronized
+  with sections table
+end note
+
+note right of sections
+  CASCADE DELETE enabled
+  Deleting a file removes
+  all associated sections
+end note
+
+@enduml

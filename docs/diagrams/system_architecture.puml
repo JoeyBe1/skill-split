@@ -1,0 +1,60 @@
+@startuml System Architecture
+!theme plain
+
+skinparam componentStyle rectangle
+
+package "Input Layer" {
+    [CLI Interface] as CLI
+    [Source Files] as Files
+}
+
+package "Parsing Layer" {
+    [FormatDetector] as Detector
+    [HandlerFactory] as Factory
+    [Core Parser] as Parser
+    [Component Handlers] as Handlers
+}
+
+package "Storage Layer" {
+    database "SQLite + FTS5" as LocalDB
+    database "Supabase + pgvector" as CloudDB
+}
+
+package "Query Layer" {
+    [Query API] as QueryAPI
+    [Hybrid Search] as HybridSearch
+    [Embedding Service] as EmbeddingSvc
+}
+
+package "Output Layer" {
+    [Recomposer] as Recomposer
+    [Skill Composer] as Composer
+    [Checkout Manager] as Checkout
+}
+
+' Relationships
+CLI --> Files
+Files --> Detector
+Detector --> Factory
+Factory --> Parser
+Factory --> Handlers
+Parser --> LocalDB
+Handlers --> LocalDB
+LocalDB <--> CloudDB
+QueryAPI --> LocalDB
+HybridSearch --> QueryAPI
+HybridSearch --> EmbeddingSvc
+HybridSearch --> CloudDB
+Recomposer --> LocalDB
+Composer --> LocalDB
+Checkout --> CloudDB
+
+' Styling
+skinparam component {
+    CLI #LightBlue
+    LocalDB #LightGreen
+    CloudDB #LightOrange
+    QueryAPI #LightYellow
+}
+
+@enduml

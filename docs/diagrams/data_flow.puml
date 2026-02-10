@@ -1,0 +1,35 @@
+@startuml Parse and Store Data Flow
+!theme plain
+
+actor User
+participant CLI
+participant Detector
+participant Factory
+participant Parser
+participant DatabaseStore
+participant Validator
+
+User -> CLI: parse <file>
+CLI -> Detector: detect(file_path, content)
+Detector --> CLI: (file_type, file_format)
+
+CLI -> Factory: create_handler(file_path)
+alt Supported File
+    Factory --> CLI: Handler instance
+    CLI -> Parser: handler.parse()
+else Markdown File
+    CLI -> Parser: parser.parse()
+end
+
+Parser --> CLI: ParsedDocument
+CLI -> DatabaseStore: store_file(file, doc, hash)
+DatabaseStore -> DatabaseStore: _store_sections()
+DatabaseStore -> DatabaseStore: _sync_section_fts()
+DatabaseStore --> CLI: file_id
+
+CLI -> Validator: validate_round_trip()
+Validator -> DatabaseStore: get_file()
+Validator -> Parser: recompose()
+Validator --> CLI: ValidationResult
+
+@enduml
