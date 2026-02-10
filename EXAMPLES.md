@@ -84,6 +84,137 @@ ENABLE_EMBEDDINGS=true ./skill_split.py search-semantic "python error handling" 
 
 This finds sections with "python" and "error" keywords, plus semantically similar content about exceptions, debugging, troubleshooting, etc.
 
+## Backup and Restore Workflows
+
+### Scenario: Creating Backups Before Major Operations
+
+**Use Case**: Protect your data before bulk operations or migrations.
+
+### Problem
+
+You're about to perform a major operation (bulk ingest, schema migration, cleanup) and want to ensure you can recover if something goes wrong.
+
+### Commands
+
+```bash
+# Step 1: Create a backup before major operation
+./skill_split.py backup --output pre-migration-20260210
+
+# Output:
+# Backup created: /Users/joey/.claude/backups/pre-migration-20260210.sql.gz
+# Database: ~/.claude/databases/skill-split.db
+# Records: 1,365 files, 19,207 sections
+
+# Step 2: Perform your operation (e.g., bulk ingest)
+./skill_split.py ingest ~/.claude/skills/
+
+# Step 3: If something goes wrong, restore from backup
+./skill_split.py restore pre-migration-20260210 --db ~/.claude/databases/skill-split.db --overwrite
+
+# Output:
+# Restoring from backup: /Users/joey/.claude/backups/pre-migration-20260210.sql.gz
+# Records restored: 20,572
+# Tables restored: 4
+# Integrity check: PASSED
+# Files: 1,365
+# Sections: 19,207
+```
+
+### Benefits
+
+- **Disaster Recovery**: Quick recovery from failed operations
+- **Point-in-Time Snapshots**: Capture database state before changes
+- **Gzip Compression**: Backup files are compressed (~10x smaller)
+- **Integrity Validation**: Automatic validation after restore
+
+### Scenario: Disaster Recovery from Corrupted Database
+
+**Use Case**: Recover from database corruption or accidental data loss.
+
+### Problem
+
+Your database has become corrupted or you accidentally deleted important data. You need to recover from a known good backup.
+
+### Commands
+
+```bash
+# Step 1: List available backups to find the right one
+./skill_split.py backup --list
+
+# Output:
+# Available backups:
+# 2026-02-10 14:30  skill-split-20260210-143000.sql.gz  1.2 MB  (compressed)
+# 2026-02-09 09:15  skill-split-20260209-091500.sql.gz  1.1 MB  (compressed)
+# 2026-02-08 16:45  skill-split-20260208-164500.sql.gz  1.0 MB  (compressed)
+
+# Step 2: Restore from the most recent good backup
+./skill_split.py restore skill-split-20260210-143000 --db ~/.claude/databases/skill-split.db --overwrite
+
+# Output:
+# Restoring from backup: /Users/joey/.claude/backups/skill-split-20260210-143000.sql.gz
+# Decompressing backup...
+# Restoring database...
+# Recreating FTS5 virtual table...
+#
+# Restore Summary:
+#   Records restored: 20,572
+#   Tables restored: 4
+#   Files: 1,365
+#   Sections: 19,207
+#   FTS5 index: Rebuilt
+#   Foreign keys: Enforced
+#   Integrity check: PASSED
+
+# Step 3: Verify the restored database
+./skill_split.py status
+
+# Output:
+# Database: ~/.claude/databases/skill-split.db
+# Files: 1,365
+# Sections: 19,207
+# Last backup: 2026-02-10 14:30
+```
+
+### Benefits
+
+- **Complete Recovery**: Full database restoration with all data
+- **Automatic Cleanup**: Failed restores are cleaned up automatically
+- **FTS5 Rebuild**: Full-text search index rebuilt automatically
+- **Validation**: Integrity check ensures database is valid
+- **Overwrite Protection**: Requires --overwrite flag for safety
+
+### Scenario: Bulk Ingest with Backup Protection
+
+**Use Case**: Safely ingest large numbers of new files with rollback protection.
+
+### Problem
+
+You have hundreds of new skill files to ingest but want to be able to rollback if the ingest causes issues.
+
+### Commands
+
+```bash
+# Step 1: Create backup before ingest
+./skill_split.py backup --output before-bulk-ingest
+
+# Step 2: Ingest new files
+./skill_split.py ingest ~/new-skills/
+
+# Step 3: If issues occur, restore and retry
+# (Perhaps there was a parsing error in some files)
+./skill_split.py restore before-bulk-ingest --db ~/.claude/databases/skill-split.db --overwrite
+
+# Step 4: Fix problematic files and retry ingest
+./skill_split.py ingest ~/new-skills/ --skip-errors
+```
+
+### Benefits
+
+- **Safe Experimentation**: Try bulk operations without risk
+- **Quick Rollback**: Restore to previous state in seconds
+- **Iterative Refinement**: Fix issues and retry as needed
+- **No Data Loss**: Original data always recoverable
+
 ## Progressive Disclosure Workflows
 
 ### Loading Large Skills Token-Efficiently
@@ -808,10 +939,13 @@ npm test
 6. **Component Handlers** - Type-specific parsing for plugins, hooks, configs
 7. **Multi-File Support** - Track related files with combined hashing
 8. **Cross-Component Search** - Search across all component types
+9. **Automated Backups** - Timestamped, compressed database dumps with integrity validation
+10. **Disaster Recovery** - Full restoration with automatic FTS5 rebuild and validation
 
 ## Next Steps
 
 - See [README.md](./README.md) for installation and setup
+- See [README.md](./README.md#backup--restore) for complete backup/restore command reference
 - See [docs/CLI_REFERENCE.md](./docs/CLI_REFERENCE.md) for complete CLI command reference
 - See [CLAUDE.md](./CLAUDE.md) for project context
 - See [COMPONENT_HANDLERS.md](./COMPONENT_HANDLERS.md) for complete component handler guide
