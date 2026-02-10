@@ -250,18 +250,47 @@ class CheckoutManager:
         """
         Checkin a file (remove from target path, update database).
 
+        Implements safe error handling with clear error messages.
+
         Args:
             target_path: Path where file is currently deployed
+
+        Raises:
+            ValueError: If no active checkout found
+            IOError: If filesystem deletion or database update fails
         """
-        # Look up checkout by target_path
+        # Step 1: Look up checkout by target_path (no side effects)
         checkout_info = self.store.get_checkout_info(target_path)
         if not checkout_info:
             raise ValueError(f"No active checkout found for path: {target_path}")
 
-        # Delete file from target path
-        target = Path(target_path)
-        if target.exists():
-            target.unlink()
+        checkout_id = checkout_info["id"]
 
-        # Update checkout status to 'returned'
-        self.store.checkin_file(checkout_info["id"])
+        # Step 2: Delete file from target path (filesystem - cannot rollback)
+        target = Path(target_path)
+        try:
+            if target.exists():
+                target.unlink()
+                logger.debug(f"Deleted checked-out file: {target_path}")
+        except Exception as fs_error:
+            # Filesystem failed, but we haven't touched database yet
+            # Safe to raise without compensating action
+            raise IOError(f"Failed to delete file {target_path}: {str(fs_error)}") from fs_error
+
+        # Step 3: Update checkout status to 'returned' in database
+        # If this fails, file is already deleted but database shows active
+        # This is a recoverable inconsistency (manual cleanup possible)
+        try:
+            self.store.checkin_file(checkout_id)
+        except Exception as db_error:
+            # File is deleted but database not updated
+            # Log warning but don't raise - file deletion is the critical operation
+            logger.error(
+                f"Database checkin failed for {checkout_id}, but file was deleted. "
+                f"Manual cleanup may be needed: {str(db_error)}"
+            )
+            # Still raise to inform caller of the issue
+            raise IOError(
+                f"File deleted but database update failed: {str(db_error)}. "
+                f"Checkout {checkout_id} may show as active in database."
+            ) from db_error
