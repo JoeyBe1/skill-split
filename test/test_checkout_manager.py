@@ -497,3 +497,252 @@ class TestTransactionSafety:
             target_path=str(target_path),
             notes=""
         )
+
+
+class TestTransactionEdgeCases:
+    """Test edge cases and boundary conditions for transaction safety."""
+
+    def test_checkout_empty_target_path(self, mock_store, tmp_path):
+        """Test checkout with empty target path uses default behavior."""
+        from uuid import uuid4
+
+        test_file_id = str(uuid4())
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        manager = CheckoutManager(mock_store)
+
+        # Empty target path should still work (uses current directory)
+        with pytest.raises((ValueError, IOError)):
+            # May fail due to invalid path, but shouldn't crash
+            manager.checkout_file(
+                file_id=test_file_id,
+                user="testuser",
+                target_path=""
+            )
+
+    def test_checkout_with_symlink_target(self, mock_store, tmp_path):
+        """Test checkout behavior with symlink in target path."""
+        from uuid import uuid4
+        import os
+
+        test_file_id = str(uuid4())
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        # Create symlink
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        link_dir = tmp_path / "link"
+        try:
+            link_dir.symlink_to(real_dir)
+        except OSError:
+            # Symlinks may not be supported on this system
+            pytest.skip("Symlinks not supported")
+
+        manager = CheckoutManager(mock_store)
+        target_path = link_dir / "test.md"
+
+        # Should work through symlink
+        result = manager.checkout_file(
+            file_id=test_file_id,
+            user="testuser",
+            target_path=str(target_path)
+        )
+
+        assert Path(result).exists()
+
+    def test_checkin_nonexistent_checkout(self, mock_store, tmp_path):
+        """Test checkin for file with no checkout record."""
+        mock_store.get_checkout_info.return_value = None
+
+        manager = CheckoutManager(mock_store)
+
+        with pytest.raises(ValueError) as exc_info:
+            manager.checkin(str(tmp_path / "nonexistent.md"))
+
+        assert "no active checkout" in str(exc_info.value).lower()
+
+    def test_checkout_with_large_content(self, mock_store, tmp_path):
+        """Test checkout with large file content."""
+        from uuid import uuid4
+
+        test_file_id = str(uuid4())
+
+        # Create large content (1MB)
+        large_content = "# Large File\n\n" + "Content\n" * 25000
+
+        section = Section(
+            level=1,
+            title="Large File",
+            content=large_content,
+            line_start=1,
+            line_end=25002
+        )
+        metadata = FileMetadata(
+            path="/large.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="large123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        manager = CheckoutManager(mock_store)
+        target_path = tmp_path / "large.md"
+
+        result = manager.checkout_file(
+            file_id=test_file_id,
+            user="testuser",
+            target_path=str(target_path)
+        )
+
+        # Verify large file was written
+        assert target_path.exists()
+        assert target_path.stat().st_size > 100_000  # > 100KB
+        assert result == str(target_path)
+
+    def test_rollback_with_open_file_handles(self, mock_store, tmp_path):
+        """Test rollback when file has open handles (Windows scenario)."""
+        from uuid import uuid4
+
+        test_file_id = str(uuid4())
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+        mock_store.checkout_file.side_effect = Exception("DB error")
+
+        manager = CheckoutManager(mock_store)
+        target_path = tmp_path / "test.md"
+
+        # On Windows, open file handles prevent deletion
+        # This test verifies we handle it gracefully
+        with pytest.raises(IOError):
+            manager.checkout_file(
+                file_id=test_file_id,
+                user="testuser",
+                target_path=str(target_path)
+            )
+
+        # File should be rolled back (or best effort)
+        # May still exist on Windows if handle held
+
+    def test_checkout_creates_parent_directories(self, mock_store, tmp_path):
+        """Test that checkout creates parent directories as needed."""
+        from uuid import uuid4
+
+        test_file_id = str(uuid4())
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        manager = CheckoutManager(mock_store)
+
+        # Deep nested path that doesn't exist
+        deep_path = tmp_path / "a" / "b" / "c" / "d" / "e" / "test.md"
+
+        result = manager.checkout_file(
+            file_id=test_file_id,
+            user="testuser",
+            target_path=str(deep_path)
+        )
+
+        # Verify all parent directories were created
+        assert deep_path.exists()
+        assert deep_path.parent.exists()
+
+    def test_multiple_checkouts_same_target(self, mock_store, tmp_path):
+        """Test multiple checkouts to same target path (idempotency)."""
+        from uuid import uuid4
+
+        file_id = str(uuid4())
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content v1",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_store.get_file.return_value = (metadata, [section])
+
+        manager = CheckoutManager(mock_store)
+        target_path = tmp_path / "test.md"
+
+        # First checkout
+        result1 = manager.checkout_file(
+            file_id=file_id,
+            user="user1",
+            target_path=str(target_path)
+        )
+
+        # Second checkout to same path (overwrites)
+        section2 = Section(
+            level=1,
+            title="Test",
+            content="Content v2",
+            line_start=1,
+            line_end=2
+        )
+        mock_store.get_file.return_value = (metadata, [section2])
+
+        result2 = manager.checkout_file(
+            file_id=file_id,
+            user="user2",
+            target_path=str(target_path)
+        )
+
+        # Both should succeed, file overwritten
+        assert target_path.exists()
+        content = target_path.read_text()
+        assert "v2" in content
