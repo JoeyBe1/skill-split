@@ -12,11 +12,11 @@ This roadmap closes 5 identified production gaps in the skill-split system. Each
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Hybrid Search Scoring** — Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
-- [x] **Phase 2: Search Fix** — Fix CLI search, add query preprocessing, FTS5 sync, child navigation, and documentation ✓ (2026-02-08)
-- [x] **Phase 3: Batch Embeddings** — Implement batch embedding generation for 10-100x speedup ✓ (2026-02-08)
-- [x] **Phase 4: Transaction Safety** — Add atomic multi-file checkout operations ✓ (2026-02-09)
-- [ ] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery
+- [x] **Phase 1: Hybrid Search Scoring** - Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
+- [x] **Phase 2: Search Fix** - Fix CLI search, add query preprocessing, FTS5 sync, child navigation, and documentation ✓ (2026-02-08)
+- [x] **Phase 3: Batch Embeddings** - Implement batch embedding generation for 10-100x speedup ✓ (2026-02-08)
+- [x] **Phase 4: Transaction Safety** - Add atomic multi-file checkout operations ✓ (2026-02-09)
+- [x] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery ✓ (2026-02-10)
 - [ ] **Phase 6: API Key Security** - Remove API keys from environment variables
 
 ## Phase Details
@@ -38,8 +38,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [x] 01-01-PLAN.md — Implement FTS5-based text scoring with rank normalization ✓
-- [x] 01-02-PLAN.md — Add text search quality tests for relevance verification ✓
+- [x] 01-01-PLAN.md - Implement FTS5-based text scoring with rank normalization ✓
+- [x] 01-02-PLAN.md - Add text search quality tests for relevance verification ✓
 
 ### Phase 2: Search Fix
 
@@ -58,11 +58,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [x] 02-01-PLAN.md — CLI search command FTS5 integration ✓
-- [x] 02-02-PLAN.md — Smart query preprocessing for natural language ✓
-- [x] 02-03-PLAN.md — FTS5 index synchronization fixes ✓
-- [x] 02-04-PLAN.md — Child navigation for progressive disclosure ✓
-- [x] 02-05-PLAN.md — Comprehensive search and navigation documentation ✓
+- [x] 02-01-PLAN.md - CLI search command FTS5 integration ✓
+- [x] 02-02-PLAN.md - Smart query preprocessing for natural language ✓
+- [x] 02-03-PLAN.md - FTS5 index synchronization fixes ✓
+- [x] 02-04-PLAN.md - Child navigation for progressive disclosure ✓
+- [x] 02-05-PLAN.md - Comprehensive search and navigation documentation ✓
 
 ### Phase 3: Batch Embeddings
 
@@ -81,8 +81,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 03-01-PLAN.md — Add batch_generate_embeddings() with 2048-item batch support and graceful failure ✓
-- [x] 03-02-PLAN.md — Add comprehensive batch integration tests and performance benchmarks ✓
+- [x] 03-01-PLAN.md - Add batch_generate_embeddings() with 2048-item batch support and graceful failure ✓
+- [x] 03-02-PLAN.md - Add comprehensive batch integration tests and performance benchmarks ✓
 
 ### Phase 4: Transaction Safety
 
@@ -101,8 +101,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 04-01-PLAN.md — Wrap checkout_manager.py operations in compensating actions ✓
-- [x] 04-02-PLAN.md — Add transaction rollback tests for multi-file failure scenarios ✓
+- [x] 04-01-PLAN.md - Wrap checkout_manager.py operations in compensating actions ✓
+- [x] 04-02-PLAN.md - Add transaction rollback tests for multi-file failure scenarios ✓
 
 ### Phase 5: Backup/Restore
 
@@ -118,11 +118,11 @@ Plans:
 3. Backup includes all sections, metadata, and embeddings
 4. Restore operation validates data integrity after restoration
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Create backup module with SQLite dump functionality
-- [ ] 05-02: Add restore command with integrity validation
+- [x] 05-01-PLAN.md - Create backup module with SQLite dump functionality ✓
+- [x] 05-02-PLAN.md - Add restore command with integrity validation ✓
 
 ### Phase 6: API Key Security
 
@@ -152,9 +152,9 @@ Plans:
 | GS-01 | Phase 1 | Complete |
 | GS-02 | Phase 3 | Complete |
 | GS-03 | Phase 4 | Complete |
-| GS-04 | Phase 5 | Planned |
+| GS-04 | Phase 5 | Complete |
 | GS-05 | Phase 6 | Planned |
 
 ---
 *Roadmap created: 2026-02-08*
-*Last updated: 2026-02-09 (Phase 4 complete)*
+*Last updated: 2026-02-10 (Phase 5 complete, GS-04 satisfied)*
