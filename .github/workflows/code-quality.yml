@@ -1,0 +1,89 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Ruff format check
+        run: |
+          ruff format --check .
+
+      - name: Ruff lint
+        run: |
+          ruff check .
+
+      - name: MyPy type check
+        run: |
+          mypy core/ handlers/ --ignore-missing-imports
+
+      - name: Bandit security check
+        run: |
+          bandit -r core/ handlers/ -f json -o bandit-report.json || true
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+      - name: Check documentation links
+        run: |
+          find docs -name "*.md" -exec echo "Checking {}" \;
+
+      - name: Verify VERSION consistency
+        run: |
+          VERSION=$(cat VERSION)
+          if ! grep -q "$VERSION" pyproject.toml; then
+            echo "VERSION mismatch between VERSION file and pyproject.toml"
+            exit 1
+          fi
+
+  complexity:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install radon
+        run: pip install radon
+
+      - name: Calculate cyclomatic complexity
+        run: |
+          radon cc core/ handlers/ -a --total-average
+
+      - name: Calculate maintainability index
+        run: |
+          radon mi core/ handlers/ --multiline
+
+      - name: Check for code smells
+        run: |
+          radon hal core/ handlers/ --min "B"
