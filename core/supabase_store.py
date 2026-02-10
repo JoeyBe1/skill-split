@@ -8,17 +8,212 @@ except ModuleNotFoundError:  # pragma: no cover - handled at runtime
     Client = object
 from models import ParsedDocument, FileMetadata, Section, FileType
 
+# Lazy import for SecretManager
+SecretManager = None
+
+
+def _ensure_secret_manager_imports():
+    """Lazy load SecretManager when needed."""
+    global SecretManager
+    if SecretManager is None:
+        try:
+            from core.secret_manager import SecretManager as SM
+            SecretManager = SM
+        except ImportError:
+            SecretManager = None
+
 
 class SupabaseStore:
     """Supabase database store for parsed documents and sections."""
 
-    def __init__(self, url: str, key: str) -> None:
-        """Initialize Supabase client."""
+    def __init__(
+        self,
+        url: Optional[str] = None,
+        key: Optional[str] = None,
+        secret_manager: Optional[Any] = None,
+        use_secret_manager: bool = True
+    ) -> None:
+        """
+        Initialize Supabase client.
+
+        Args:
+            url: Supabase project URL. If None, tries SecretManager then SUPABASE_URL env var
+            key: Supabase API key. If None, tries SecretManager then SUPABASE_KEY env var
+            secret_manager: Optional SecretManager instance for credential retrieval
+            use_secret_manager: If True, try SecretManager before env vars (default: True)
+
+        Raises:
+            ImportError: If Supabase client is not available
+            ValueError: If credentials not found from any source
+
+        Credential priority order:
+            1. url/key parameters (direct)
+            2. SecretManager (if use_secret_manager=True)
+            3. SUPABASE_URL/SUPABASE_KEY environment variables
+        """
         if create_client is None:
             raise ImportError("Supabase client not available. Install 'supabase' package to use Supabase features.")
-        self.url = url
-        self.key = key
-        self.client: Client = create_client(url, key)
+
+        # Ensure SecretManager imports if needed
+        _ensure_secret_manager_imports()
+
+        self._secret_manager = secret_manager
+        self._url_source = None
+        self._key_source = None
+
+        # Try to get URL from various sources
+        if url:
+            # Direct parameter takes highest priority
+            self.url = url
+            self._url_source = "parameter"
+        elif use_secret_manager and secret_manager:
+            # Use provided SecretManager
+            try:
+                self.url, url_source_type = secret_manager.get_secret_with_source("SUPABASE_URL")
+                self._url_source = url_source_type.value
+            except Exception:
+                # Try alternate key names
+                try:
+                    self.url, url_source_type = secret_manager.get_secret_with_source("supabase_url")
+                    self._url_source = url_source_type.value
+                except Exception:
+                    # Fall back to environment
+                    self.url = os.getenv("SUPABASE_URL")
+                    if self.url:
+                        self._url_source = "environment"
+        elif use_secret_manager and SecretManager:
+            # Create temporary SecretManager instance
+            try:
+                temp_manager = SecretManager()
+                self.url, url_source_type = temp_manager.get_secret_with_source("SUPABASE_URL")
+                self._url_source = url_source_type.value
+                self._secret_manager = temp_manager
+            except Exception:
+                # Try alternate key name
+                try:
+                    self.url, url_source_type = temp_manager.get_secret_with_source("supabase_url")
+                    self._url_source = url_source_type.value
+                except Exception:
+                    # Fall back to environment
+                    self.url = os.getenv("SUPABASE_URL")
+                    if self.url:
+                        self._url_source = "environment"
+        else:
+            # Just use environment or parameter
+            self.url = url or os.getenv("SUPABASE_URL")
+            if self.url:
+                self._url_source = "environment" if not url else "parameter"
+
+        # Try to get key from various sources
+        if key:
+            # Direct parameter takes highest priority
+            self.key = key
+            self._key_source = "parameter"
+        elif use_secret_manager and secret_manager:
+            # Use provided SecretManager
+            try:
+                self.key, key_source_type = secret_manager.get_secret_with_source("SUPABASE_KEY")
+                self._key_source = key_source_type.value
+            except Exception:
+                # Try alternate key names
+                try:
+                    self.key, key_source_type = secret_manager.get_secret_with_source("supabase_key")
+                    self._key_source = key_source_type.value
+                except Exception:
+                    # Fall back to environment
+                    self.key = self._get_supabase_key_from_env()
+                    if self.key:
+                        self._key_source = "environment"
+        elif use_secret_manager and SecretManager:
+            # Create temporary SecretManager instance
+            try:
+                temp_manager = SecretManager()
+                self.key, key_source_type = temp_manager.get_secret_with_source("SUPABASE_KEY")
+                self._key_source = key_source_type.value
+            except Exception:
+                # Try alternate key name
+                try:
+                    self.key, key_source_type = temp_manager.get_secret_with_source("supabase_key")
+                    self._key_source = key_source_type.value
+                except Exception:
+                    # Fall back to environment
+                    self.key = self._get_supabase_key_from_env()
+                    if self.key:
+                        self._key_source = "environment"
+        else:
+            # Just use environment or parameter
+            self.key = key or self._get_supabase_key_from_env()
+            if self.key:
+                self._key_source = "environment" if not key else "parameter"
+
+        # Validate credentials
+        if not self.url:
+            raise ValueError(
+                "Supabase URL not found. Tried: url parameter, SecretManager (SUPABASE_URL, supabase_url), "
+                "SUPABASE_URL environment variable. Provide url parameter or set SUPABASE_URL environment variable."
+            )
+
+        if not self.key:
+            raise ValueError(
+                "Supabase key not found. Tried: key parameter, SecretManager (SUPABASE_KEY, supabase_key), "
+                "SUPABASE_KEY/SUPABASE_PUBLISHABLE_KEY/SUPABASE_SECRET_KEY environment variables. "
+                "Provide key parameter or set SUPABASE_KEY environment variable."
+            )
+
+        self.client: Client = create_client(self.url, self.key)
+
+    def _get_supabase_key_from_env(self) -> Optional[str]:
+        """
+        Get Supabase key from environment variables.
+
+        Tries multiple environment variable names in order:
+        SUPABASE_KEY, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY
+
+        Returns:
+            Key value or None if not found
+        """
+        return (
+            os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+
+    @classmethod
+    def from_config(cls, config_path: Optional[str] = None) -> 'SupabaseStore':
+        """
+        Create SupabaseStore from SecretManager config.
+
+        Args:
+            config_path: Path to secrets config file (default: ~/.claude/secrets.json)
+
+        Returns:
+            SupabaseStore instance with credentials from SecretManager
+
+        Raises:
+            ImportError: If SecretManager not available
+            ValueError: If credentials not found in config
+        """
+        _ensure_secret_manager_imports()
+        if SecretManager is None:
+            raise ImportError("SecretManager not available. Install core.secret_manager or provide url/key parameters.")
+
+        secret_manager = SecretManager(config_path=config_path)
+        return cls(secret_manager=secret_manager)
+
+    def get_credential_source(self) -> Dict[str, Optional[str]]:
+        """
+        Get the source of Supabase credentials.
+
+        Useful for debugging and logging to understand where
+        credentials are coming from.
+
+        Returns:
+            Dictionary with 'url_source' and 'key_source' keys
+        """
+        return {
+            'url_source': self._url_source,
+            'key_source': self._key_source
+        }
 
     def store_file(
         self, storage_path: str, name: str, doc: ParsedDocument, content_hash: str
@@ -480,13 +675,16 @@ class SupabaseStore:
             # Embedding service not available
             return
 
-        # Get OpenAI API key
-        openai_key = os.getenv('OPENAI_API_KEY')
-        if not openai_key:
-            return
-
+        # Try to get OpenAI API key from SecretManager if available
         try:
-            embedding_service = EmbeddingService(openai_key)
+            if self._secret_manager:
+                embedding_service = EmbeddingService(secret_manager=self._secret_manager)
+            else:
+                # Fall back to environment
+                openai_key = os.getenv('OPENAI_API_KEY')
+                if not openai_key:
+                    return
+                embedding_service = EmbeddingService(openai_key)
         except Exception:
             # Embedding service initialization failed
             return

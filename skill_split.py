@@ -10,6 +10,7 @@ import argparse
 import sys
 import os
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -34,6 +35,7 @@ from handlers.factory import HandlerFactory
 # (to allow running core commands without Supabase installed)
 SupabaseStore = None
 CheckoutManager = None
+SecretManager = None
 
 
 def get_default_db_path():
@@ -51,37 +53,85 @@ def get_default_db_path():
 
 def _ensure_supabase_imports():
     """Lazy load Supabase dependencies when needed."""
-    global SupabaseStore, CheckoutManager
+    global SupabaseStore, CheckoutManager, SecretManager
     if SupabaseStore is None:
         try:
             from core.supabase_store import SupabaseStore as SB
             from core.checkout_manager import CheckoutManager as CM
+            from core.secret_manager import SecretManager as SM
             SupabaseStore = SB
             CheckoutManager = CM
+            SecretManager = SM
         except ImportError as e:
             print(f"Error: Supabase modules not available. {e}", file=sys.stderr)
             sys.exit(1)
 
 
 
-def _get_supabase_store():
-    """Get SupabaseStore instance from environment credentials.
-    
+def _get_supabase_store(use_secret_manager: bool = True, secrets_config: Optional[str] = None):
+    """Get SupabaseStore instance from environment credentials or SecretManager.
+
+    Args:
+        use_secret_manager: If True, try SecretManager before environment (default: True)
+        secrets_config: Optional path to secrets config file
+
     Returns:
         SupabaseStore instance if credentials are valid, None otherwise.
     """
+    _ensure_supabase_imports()
+
+    # Try SecretManager first if enabled
+    if use_secret_manager and SecretManager:
+        try:
+            secret_manager = SecretManager(config_path=secrets_config)
+            return SupabaseStore(secret_manager=secret_manager)
+        except Exception:
+            # Fall back to environment variables
+            pass
+
+    # Fall back to environment variables
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = _get_supabase_key()
-    
+
     if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY (or SUPABASE_PUBLISHABLE_KEY) environment variables are required", file=sys.stderr)
+        print(
+            "Error: Supabase credentials not found. Tried: SecretManager, environment variables.\n"
+            "Set SUPABASE_URL and SUPABASE_KEY environment variables, or configure ~/.claude/secrets.json",
+            file=sys.stderr
+        )
         return None
-    
+
     return SupabaseStore(supabase_url, supabase_key)
 
 
-def _get_supabase_key():
-    """Return Supabase key from supported environment variables."""
+def _get_supabase_key(use_secret_manager: bool = True, secrets_config: Optional[str] = None) -> Optional[str]:
+    """Return Supabase key from SecretManager or supported environment variables.
+
+    Args:
+        use_secret_manager: If True, try SecretManager first
+        secrets_config: Optional path to secrets config file
+
+    Returns:
+        Supabase key or None if not found
+    """
+    _ensure_supabase_imports()
+
+    # Try SecretManager first if enabled
+    if use_secret_manager and SecretManager:
+        try:
+            secret_manager = SecretManager(config_path=secrets_config)
+            # Try various key names
+            try:
+                return secret_manager.get_secret("SUPABASE_KEY")
+            except Exception:
+                try:
+                    return secret_manager.get_secret("supabase_key")
+                except Exception:
+                    pass  # Fall through to environment
+        except Exception:
+            pass  # Fall through to environment
+
+    # Fall back to environment variables
     return (
         os.getenv("SUPABASE_KEY")
         or os.getenv("SUPABASE_PUBLISHABLE_KEY")
@@ -460,7 +510,9 @@ def cmd_ingest(args) -> int:
         return 1
 
     # Initialize store
-    store = _get_supabase_store()
+    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    secrets_cfg = getattr(args, 'secrets_config', None)
+    store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
 
@@ -601,7 +653,9 @@ def cmd_list_library(args) -> int:
     """List files in library."""
     _ensure_supabase_imports()
     # Initialize store
-    store = _get_supabase_store()
+    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    secrets_cfg = getattr(args, 'secrets_config', None)
+    store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
 
@@ -642,7 +696,9 @@ def cmd_status(args) -> int:
     user = getattr(args, 'user', None)
 
     # Initialize store
-    store = _get_supabase_store()
+    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    secrets_cfg = getattr(args, 'secrets_config', None)
+    store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
 
@@ -681,7 +737,9 @@ def cmd_search_library(args) -> int:
     query = args.query
 
     # Initialize store
-    store = _get_supabase_store()
+    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    secrets_cfg = getattr(args, 'secrets_config', None)
+    store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
 
@@ -905,7 +963,9 @@ def cmd_compose(args) -> int:
 
         # Upload to Supabase if requested
         if upload:
-            supabase_store = _get_supabase_store()
+            use_sm = not getattr(args, 'no_use_secret_manager', False)
+            secrets_cfg = getattr(args, 'secrets_config', None)
+            supabase_store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
             if not supabase_store:
                 print("Warning: Supabase credentials not available, skipping upload", file=sys.stderr)
                 return 0
@@ -965,7 +1025,9 @@ def cmd_search_semantic(args) -> int:
         from core.hybrid_search import HybridSearch
         from core.query import QueryAPI
 
-        supabase_store = _get_supabase_store()
+        use_sm = not getattr(args, 'no_use_secret_manager', False)
+        secrets_cfg = getattr(args, 'secrets_config', None)
+        supabase_store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
         if not supabase_store:
             print("Error: Supabase credentials required for semantic search", file=sys.stderr)
             return 1
@@ -1195,6 +1257,8 @@ def main() -> int:
         "ingest", help="Parse and store files from directory"
     )
     ingest_parser.add_argument("source_dir", help="Path to directory containing files to ingest")
+    ingest_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    ingest_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     ingest_parser.set_defaults(func=cmd_ingest)
 
     # Checkout command
@@ -1217,6 +1281,8 @@ def main() -> int:
     list_library_parser = subparsers.add_parser(
         "list-library", help="List files in library"
     )
+    list_library_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    list_library_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     list_library_parser.set_defaults(func=cmd_list_library)
 
     # Status command
@@ -1224,6 +1290,8 @@ def main() -> int:
         "status", help="Show active checkouts"
     )
     status_parser.add_argument("--user", help="Filter by username (optional)")
+    status_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    status_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     status_parser.set_defaults(func=cmd_status)
 
     # Search-library command
@@ -1231,6 +1299,8 @@ def main() -> int:
         "search-library", help="Search files by query"
     )
     search_library_parser.add_argument("query", help="Search query")
+    search_library_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    search_library_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     search_library_parser.set_defaults(func=cmd_search_library)
 
     # Get-section command (query)
@@ -1294,6 +1364,8 @@ def main() -> int:
     compose_parser.add_argument("--upload", action="store_true", help="Upload to Supabase after composition")
     compose_parser.add_argument("--validate", action=argparse.BooleanOptionalAction, default=True, help="Run strict validation (default: True)")
     compose_parser.add_argument("--enrich", action=argparse.BooleanOptionalAction, default=True, help="Force deep metadata extraction (default: True)")
+    compose_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    compose_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     compose_parser.add_argument(
         "--db", default=get_default_db_path(), help="Path to database (default: env SKILL_SPLIT_DB or ~/.claude/databases/skill-split.db)"
     )
@@ -1306,6 +1378,8 @@ def main() -> int:
     search_semantic_parser.add_argument("query", help="Search query")
     search_semantic_parser.add_argument("--limit", type=int, default=10, help="Max results (default: 10)")
     search_semantic_parser.add_argument("--vector-weight", type=float, default=0.7, help="Vector score weight (0.0-1.0, default: 0.7)")
+    search_semantic_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
+    search_semantic_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
     search_semantic_parser.add_argument(
         "--db", default=get_default_db_path(), help="Path to database (default: env SKILL_SPLIT_DB or ~/.claude/databases/skill-split.db)"
     )

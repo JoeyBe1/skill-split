@@ -2,7 +2,7 @@
 import os
 import pytest
 from uuid import UUID, uuid4
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 from core.supabase_store import SupabaseStore
 from models import ParsedDocument, FileType, FileFormat
 
@@ -311,3 +311,190 @@ class TestCheckoutTracking:
         assert len(checkouts) == 2
         assert all(c["status"] == "active" for c in checkouts)
         assert all(c["user_name"] == "joey" for c in checkouts)
+
+
+class TestSupabaseSecretManagerIntegration:
+    """Test SecretManager integration with SupabaseStore."""
+
+    @patch('core.supabase_store.create_client')
+    def test_init_with_secret_manager(self, mock_create_client):
+        """Test initialization with SecretManager parameter."""
+        from core.secret_manager import SecretSourceType
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = [
+            ("https://test.supabase.co", SecretSourceType.FILE),
+            ("test-key-123", SecretSourceType.FILE)
+        ]
+
+        store = SupabaseStore(secret_manager=mock_sm)
+
+        assert store.url == "https://test.supabase.co"
+        assert store.key == "test-key-123"
+        assert store._url_source == "file"
+        assert store._key_source == "file"
+
+    @patch('core.supabase_store.create_client')
+    def test_init_with_secret_manager_partial(self, mock_create_client):
+        """Test initialization with SecretManager for URL, key from parameter."""
+        from core.secret_manager import SecretSourceType
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager for URL only
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = [
+            ("https://test.supabase.co", SecretSourceType.FILE),  # First call for URL
+            Exception("Key not found")  # Second call for key fails
+        ]
+
+        store = SupabaseStore(key="test-key-456", secret_manager=mock_sm)
+
+        assert store.url == "https://test.supabase.co"
+        assert store.key == "test-key-456"
+        assert store._url_source == "file"
+        assert store._key_source == "parameter"
+
+    @patch('core.supabase_store.create_client')
+    def test_init_from_config(self, mock_create_client):
+        """Test from_config class method."""
+        from core.secret_manager import SecretSourceType, SecretManager as RealSecretManager
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager class
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = [
+            ("https://from-config.supabase.co", SecretSourceType.FILE),
+            ("config-key-789", SecretSourceType.FILE)
+        ]
+
+        with patch('core.supabase_store.SecretManager', return_value=mock_sm):
+            store = SupabaseStore.from_config()
+
+            assert store.url == "https://from-config.supabase.co"
+            assert store.key == "config-key-789"
+
+    @patch('core.supabase_store.create_client')
+    @patch.dict('os.environ', {"SUPABASE_URL": "https://env.supabase.co", "SUPABASE_KEY": "env-key-123"})
+    def test_init_secret_manager_fallback_to_env(self, mock_create_client):
+        """Test fallback to environment when SecretManager fails."""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager to fail
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = Exception("Secret not found")
+
+        store = SupabaseStore(secret_manager=mock_sm)
+
+        assert store.url == "https://env.supabase.co"
+        assert store.key == "env-key-123"
+        assert store._url_source == "environment"
+        assert store._key_source == "environment"
+
+    @patch('core.supabase_store.create_client')
+    def test_init_secret_manager_not_available(self, mock_create_client):
+        """Test graceful degradation when SecretManager unavailable."""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock _ensure_secret_manager_imports to set SecretManager to None
+        with patch('core.supabase_store._ensure_secret_manager_imports'):
+            with patch.dict('os.environ', {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_KEY": "test-key"}):
+                store = SupabaseStore(use_secret_manager=True)
+
+        assert store.url == "https://test.supabase.co"
+        assert store.key == "test-key"
+        assert store._url_source == "environment"
+        assert store._key_source == "environment"
+
+    @patch('core.supabase_store.create_client')
+    def test_init_use_secret_manager_false(self, mock_create_client):
+        """Test use_secret_manager=False disables SecretManager."""
+        from core.secret_manager import SecretSourceType
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.return_value = ("https://sm.supabase.co", SecretSourceType.FILE)
+
+        with patch.dict('os.environ', {"SUPABASE_URL": "https://env.supabase.co", "SUPABASE_KEY": "env-key"}):
+            store = SupabaseStore(
+                secret_manager=mock_sm,
+                use_secret_manager=False
+            )
+
+        # Should use environment, not SecretManager
+        assert store.url == "https://env.supabase.co"
+        assert store.key == "env-key"
+        assert store._url_source == "environment"
+        assert store._key_source == "environment"
+
+    @patch('core.supabase_store.create_client')
+    def test_init_all_sources_fail(self, mock_create_client):
+        """Test ValueError when all sources fail."""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager to fail
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = Exception("Secret not found")
+
+        with patch.dict('os.environ', {}, clear=True):
+            with pytest.raises(ValueError, match="Supabase URL not found"):
+                SupabaseStore(secret_manager=mock_sm)
+
+    @patch('core.supabase_store.create_client')
+    def test_get_credential_source(self, mock_create_client):
+        """Test get_credential_source method."""
+        from core.secret_manager import SecretSourceType
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Mock SecretManager with different sources
+        mock_sm = MagicMock()
+        mock_sm.get_secret_with_source.side_effect = [
+            ("https://test.supabase.co", SecretSourceType.FILE),
+            ("test-key", SecretSourceType.ENV)
+        ]
+
+        store = SupabaseStore(secret_manager=mock_sm)
+
+        source = store.get_credential_source()
+
+        assert source['url_source'] == "file"
+        assert source['key_source'] == "environment"
+
+    @patch('core.supabase_store.create_client')
+    def test_backward_compat_with_url_key_params(self, mock_create_client):
+        """Test backward compatibility with url/key parameters."""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Old way: just pass url and key
+        store = SupabaseStore(url="https://old-way.supabase.co", key="old-key-123")
+
+        assert store.url == "https://old-way.supabase.co"
+        assert store.key == "old-key-123"
+        assert store._url_source == "parameter"
+        assert store._key_source == "parameter"
+
+    @patch('core.supabase_store.create_client')
+    @patch.dict('os.environ', {"SUPABASE_URL": "https://env.compat.supabase.co", "SUPABASE_KEY": "compat-key-456"})
+    def test_backward_compat_with_env_vars(self, mock_create_client):
+        """Test backward compatibility with environment variables."""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+
+        # Old way: no parameters, rely on env vars
+        store = SupabaseStore()
+
+        assert store.url == "https://env.compat.supabase.co"
+        assert store.key == "compat-key-456"
+        assert store._url_source == "environment"
+        assert store._key_source == "environment"
