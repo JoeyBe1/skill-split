@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Hybrid Search Scoring** — Replace placeholder text scoring with proper full-text search ✓ (2026-02-08)
 - [x] **Phase 2: Search Fix** — Fix CLI search, add query preprocessing, FTS5 sync, child navigation, and documentation ✓ (2026-02-08)
 - [x] **Phase 3: Batch Embeddings** — Implement batch embedding generation for 10-100x speedup ✓ (2026-02-08)
-- [ ] **Phase 4: Transaction Safety** - Add atomic multi-file checkout operations
+- [x] **Phase 4: Transaction Safety** — Add atomic multi-file checkout operations ✓ (2026-02-09)
 - [ ] **Phase 5: Backup/Restore** - Implement automated backup and disaster recovery
 - [ ] **Phase 6: API Key Security** - Remove API keys from environment variables
 
@@ -98,11 +98,11 @@ Plans:
 3. Transaction errors are logged with clear messages about which operation failed
 4. All existing tests pass with transaction wrapping
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Wrap checkout_manager.py operations in database transactions
-- [ ] 04-02: Add transaction rollback tests for multi-file failure scenarios
+- [x] 04-01-PLAN.md — Wrap checkout_manager.py operations in compensating actions ✓
+- [x] 04-02-PLAN.md — Add transaction rollback tests for multi-file failure scenarios ✓
 
 ### Phase 5: Backup/Restore
 
@@ -150,11 +150,11 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GS-01 | Phase 1 | Complete |
-| GS-02 | Phase 3 | Planned |
-| GS-03 | Phase 4 | Planned |
+| GS-02 | Phase 3 | Complete |
+| GS-03 | Phase 4 | Complete |
 | GS-04 | Phase 5 | Planned |
 | GS-05 | Phase 6 | Planned |
 
 ---
 *Roadmap created: 2026-02-08*
-*Last updated: 2026-02-08 (Phase 2 complete)*
+*Last updated: 2026-02-09 (Phase 4 complete)*
