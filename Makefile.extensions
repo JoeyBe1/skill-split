@@ -1,0 +1,156 @@
+# skill-split Makefile Extensions
+# Additional high-value development targets
+
+.PHONY: all check-format security-depency graph-deps clean-all
+
+# Complete development workflow
+all: install lint-all test benchmark docs
+	@echo "✅ All development checks complete"
+
+# Format check only (no modifications)
+check-format:
+	@echo "Checking code format..."
+	@ruff format --check .
+	@echo "✅ Format check passed"
+
+# Security audit
+security-audit:
+	@echo "Running security audit..."
+	@bandit -r core/ handlers/ -f screen -ll
+	@echo "✅ Security audit complete"
+
+# Dependency graph
+graph-deps:
+	@echo "Generating dependency graph..."
+	@pydeps skill_split --max-bacon=3 --cluster -o deps.svg
+	@echo "✅ Dependency graph: deps.svg"
+
+# Clean all generated files
+clean-all:
+	@echo "Deep clean..."
+	@find . -type d -name "__pycache__" -exec rm -rf {} +
+	@find . -type f -name "*.pyc" -delete
+	@find . -type f -name "*.pyo" -delete
+	@find . -type f -name "*.db" -delete
+	@find . -type f -name "*.db-wal" -delete
+	@find . -type f -name "*.db-shm" -delete
+	@rm -rf htmlcov/ .coverage .pytest_cache dist/ build/
+	@rm -rf *.egg-info .eggs/
+	@rm -rf ruff_cache/ .mypy_cache/
+	@rm -rf deps.svg
+	@echo "✅ Clean complete"
+
+# Quick test (failing tests only)
+test-fail:
+	@python -m pytest test/ --tb=short -v
+
+# Integration tests only
+test-integration:
+	@python -m pytest test/integration/ -v
+
+# Unit tests only
+test-unit:
+	@python -m pytest test/ -v -k "not integration"
+
+# Performance regression test
+perf-check:
+	@python -m pytest benchmark/bench.py --benchmark-only --benchmark-compare-fail=mean:10%
+
+# Generate coverage badge
+coverage-badge:
+	@python -m pytest test/ --cov=. --cov-report=term-missing
+	@coverage-badge -o coverage.svg -f
+
+# Documentation links check
+docs-check:
+	@find docs -name "*.md" -exec grep -H '](.*md)' {} \; | wc -l
+	@echo "⚠️  Review markdown links manually"
+
+# Profiling
+profile:
+	@python -m cProfile -o profile.stats skill_split.py parse README.md
+	@python -c "import pstats; p = pstats.Stats('profile.stats'); p.sort_stats('cumulative').print_stats(20)"
+
+# Database analysis
+db-analyze:
+	@echo "Analyzing database..."
+	@sqlite3 ~/.claude/databases/skill-split.db "SELECT COUNT(*) as sections FROM sections;"
+	@sqlite3 ~/.claude/databases/skill-split.db "SELECT COUNT(DISTINCT file_path) as files FROM sections;"
+	@sqlite3 ~/.claude/databases/skill-split.db "SELECT AVG(LENGTH(content)) as avg_size FROM sections;"
+
+# Export database
+db-export:
+	@sqlite3 ~/.claude/databases/skill-split.db .dump > backup/skill_split_$(shell date +%Y%m%d).sql
+	@echo "✅ Database exported"
+
+# Import database
+db-import:
+	@sqlite3 ~/.claude/databases/skill-split.db < $(BACKUP)
+	@echo "✅ Database imported"
+
+# Docker build
+docker-build:
+	@docker build -t skill-split:latest .
+	@echo "✅ Docker image built"
+
+# Docker run
+docker-run:
+	@docker run --rm -v $(PWD)/docs:/docs:ro skill-split:latest list docs/ARCHITECTURE.md
+
+# Docker test
+docker-test:
+	@docker run --rm skill-split:latest python -m pytest test/
+
+# Release dry-run
+release-dry:
+	@python -m build
+	@twine check dist/*
+	@echo "✅ Release dry-run complete"
+
+# Version bump
+bump-patch:
+	@$(eval VERSION=$$(cat VERSION | awk -F. '{print $$1"."$$2"."$$3+1}'))
+	@echo $(VERSION) > VERSION
+	@echo "✅ Bumped to $(VERSION)"
+
+bump-minor:
+	@$(eval VERSION=$$(cat VERSION | awk -F. '{print $$1"."$$2+1".0"}'))
+	@echo $(VERSION) > VERSION
+	@echo "✅ Bumped to $(VERSION)"
+
+bump-major:
+	@$(eval VERSION=$$(cat VERSION | awk -F. '{print $$1+1".0.0"}'))
+	@echo $(VERSION) > VERSION
+	@echo "✅ Bumped to $(VERSION)"
+
+# Help (extended)
+help-extended:
+	@echo "skill-split - Extended Commands"
+	@echo ""
+	@echo "Development:"
+	@echo "  make all            Run full development workflow"
+	@echo "  make check-format   Check code format without modifying"
+	@echo "  make security-audit Run security audit"
+	@echo "  make graph-deps     Generate dependency graph"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test-fail      Show only failing tests"
+	@echo "  make test-unit      Run unit tests only"
+	@echo "  make test-integration Run integration tests only"
+	@echo "  make perf-check     Check for performance regression"
+	@echo ""
+	@echo "Database:"
+	@echo "  make db-analyze     Analyze database statistics"
+	@echo "  make db-export      Export database to SQL"
+	@echo "  make db-import      Import database from SQL"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build   Build Docker image"
+	@echo "  make docker-run     Run Docker container"
+	@echo "  make docker-test    Test in Docker"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release-dry    Test release process"
+	@echo "  make bump-patch     Bump patch version"
+	@echo "  make bump-minor     Bump minor version"
+	@echo "  make bump-major     Bump major version"
