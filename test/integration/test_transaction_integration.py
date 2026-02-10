@@ -454,3 +454,156 @@ class TestTransactionErrorRecovery:
 
         # Files should still exist (no checkout record to verify deletion)
         assert plugin_file.exists()
+
+
+class TestTransactionPerformance:
+    """Performance benchmarks for transaction safety overhead."""
+
+    def test_checkout_performance_baseline(self, mock_supabase_store, temp_dir):
+        """Benchmark successful checkout performance."""
+        import time
+        from uuid import uuid4
+
+        iterations = 100
+        file_id = str(uuid4())
+
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_supabase_store.get_file.return_value = (metadata, [section])
+
+        manager = CheckoutManager(mock_supabase_store)
+
+        start = time.perf_counter()
+        for i in range(iterations):
+            target_path = temp_dir / f"test_{i}.md"
+            manager.checkout_file(
+                file_id=file_id,
+                user="testuser",
+                target_path=str(target_path)
+            )
+        elapsed = time.perf_counter() - start
+
+        avg_time = elapsed / iterations
+        print(f"\nAverage checkout time: {avg_time*1000:.2f}ms")
+
+        # Transaction overhead should be minimal (< 10ms per checkout)
+        assert avg_time < 0.01, f"Checkout too slow: {avg_time*1000:.2f}ms"
+
+    def test_rollback_performance(self, mock_supabase_store, temp_dir):
+        """Benchmark rollback performance."""
+        import time
+        from uuid import uuid4
+
+        iterations = 100
+        file_id = str(uuid4())
+
+        section = Section(
+            level=1,
+            title="Test",
+            content="Content",
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/test.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123"
+        )
+        mock_supabase_store.get_file.return_value = (metadata, [section])
+        mock_supabase_store.checkout_file.side_effect = Exception("DB error")
+
+        manager = CheckoutManager(mock_supabase_store)
+
+        start = time.perf_counter()
+        for i in range(iterations):
+            target_path = temp_dir / f"test_{i}.md"
+            try:
+                manager.checkout_file(
+                    file_id=file_id,
+                    user="testuser",
+                    target_path=str(target_path)
+                )
+            except IOError:
+                pass  # Expected
+        elapsed = time.perf_counter() - start
+
+        avg_time = elapsed / iterations
+        print(f"\nAverage rollback time: {avg_time*1000:.2f}ms")
+
+        # Rollback should also be fast
+        assert avg_time < 0.01, f"Rollback too slow: {avg_time*1000:.2f}ms"
+
+    def test_multi_file_checkout_performance(self, mock_supabase_store, temp_dir):
+        """Benchmark multi-file plugin checkout performance."""
+        import time
+        import json
+        from uuid import uuid4
+
+        file_id = str(uuid4())
+
+        # Setup plugin with 5 related files
+        plugin_content = json.dumps({"name": "test", "version": "1.0"})
+        section = Section(
+            level=-1,
+            title="plugin.json",
+            content=plugin_content,
+            line_start=1,
+            line_end=2
+        )
+        metadata = FileMetadata(
+            path="/plugins/test/plugin.json",
+            type=FileType.PLUGIN,
+            frontmatter=plugin_content,
+            hash="abc123"
+        )
+        mock_supabase_store.get_file.return_value = (metadata, [section])
+
+        # Mock 5 related files
+        related_files = []
+        for i in range(5):
+            related_files.append({
+                "storage_path": f"/plugins/test/file{i}.json"
+            })
+
+        mock_supabase_store.list_files_by_prefix.return_value = related_files
+
+        def mock_get_by_path(path):
+            return (
+                FileMetadata(path, FileType.CONFIG, "{}", "hash"),
+                []
+            )
+
+        mock_supabase_store.get_file_by_path.side_effect = mock_get_by_path
+
+        manager = CheckoutManager(mock_supabase_store)
+
+        iterations = 50
+        start = time.perf_counter()
+        for i in range(iterations):
+            target_dir = temp_dir / f"plugin_{i}"
+            target_path = target_dir / "plugin.json"
+            manager.checkout_file(
+                file_id=file_id,
+                user="testuser",
+                target_path=str(target_path)
+            )
+        elapsed = time.perf_counter() - start
+
+        avg_time = elapsed / iterations
+        print(f"\nAverage multi-file checkout time: {avg_time*1000:.2f}ms")
+
+        # Multi-file checkout should still be fast
+        assert avg_time < 0.05, f"Multi-file checkout too slow: {avg_time*1000:.2f}ms"
+
