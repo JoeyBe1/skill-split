@@ -1,6 +1,55 @@
 # skill-split
 
-Intelligently split YAML and Markdown files into sections and store them in SQLite for progressive disclosure. Now with component handler support for plugins, hooks, and configuration files.
+Parse, store, search, compose, and deploy any Claude Code component (skills, commands, plugins, hooks, configs, scripts) with full section-level granularity and 99% token savings.
+
+## Two Modes: Local SQLite vs Supabase Cloud
+
+### Local Mode (no credentials needed)
+
+```bash
+# Store any file into local DB
+python skill_split.py store my-skill.md --db my.db
+
+# List everything in the library
+python skill_split.py list-library --db my.db
+
+# Checkout section(s) to deploy them
+python skill_split.py checkout 1 ~/.claude/skills/my-skill.md --db my.db
+
+# See what's checked out
+python skill_split.py status --db my.db
+
+# Checkin (remove deployment)
+python skill_split.py checkin ~/.claude/skills/my-skill.md --db my.db
+
+# Compose NEW skill from any sections across any files
+python skill_split.py compose --sections 3,7,12 --output new-skill.md --db my.db
+
+# BM25 keyword search
+python skill_split.py search "python handler" --db my.db
+```
+
+### Supabase Cloud Mode (requires credentials)
+
+Set env vars (copy `.env.example` to `.env`):
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+```
+
+Then use the same commands **without** `--db`:
+```bash
+python skill_split.py ingest my-skill.md
+python skill_split.py list-library
+python skill_split.py checkout <uuid> ~/.claude/skills/my-skill.md
+python skill_split.py status
+python skill_split.py checkin ~/.claude/skills/my-skill.md
+python skill_split.py search-library "python handler"
+```
+
+> **No credentials yet?** All `--db` commands work fully offline. Add Supabase creds later for cloud sync and semantic/vector search.
+
+---
 
 ## What It Does
 

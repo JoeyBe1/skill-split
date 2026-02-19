@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from verify_sync import SyncVerifier, SyncReport, load_env_config, format_report
+from scripts.ingest.verify_sync import SyncVerifier, SyncReport, load_env_config, format_report
 
 
 class TestSyncReport:
@@ -362,7 +362,7 @@ class TestReportFormatting:
 class TestLoadEnvConfig:
     """Test environment configuration loading."""
 
-    @patch("verify_sync.load_dotenv")
+    @patch("scripts.ingest.verify_sync.load_dotenv")
     @patch.dict(
         os.environ,
         {
@@ -379,7 +379,7 @@ class TestLoadEnvConfig:
         assert url == "https://example.supabase.co"
         assert key == "test_key"
 
-    @patch("verify_sync.load_dotenv")
+    @patch("scripts.ingest.verify_sync.load_dotenv")
     @patch.dict(
         os.environ,
         {
@@ -395,7 +395,7 @@ class TestLoadEnvConfig:
         assert url == "https://example.supabase.co"
         assert key == "secret_key"
 
-    @patch("verify_sync.load_dotenv")
+    @patch("scripts.ingest.verify_sync.load_dotenv")
     @patch.dict(os.environ, {"SUPABASE_KEY": "test_key"}, clear=True)
     def test_load_env_config_missing_url(self, mock_load_dotenv):
         """Test error when SUPABASE_URL is missing."""
@@ -404,7 +404,7 @@ class TestLoadEnvConfig:
 
         assert "SUPABASE_URL" in str(exc_info.value)
 
-    @patch("verify_sync.load_dotenv")
+    @patch("scripts.ingest.verify_sync.load_dotenv")
     @patch.dict(os.environ, {"SUPABASE_URL": "https://example.supabase.co"}, clear=True)
     def test_load_env_config_missing_key(self, mock_load_dotenv):
         """Test error when both key environment variables are missing."""
@@ -446,7 +446,7 @@ class TestSyncVerifierIntegration:
             with patch.object(
                 verifier, "_load_supabase_files"
             ) as mock_supabase:
-                from verify_sync import FileInfo
+                from scripts.ingest.verify_sync import FileInfo
 
                 mock_supabase.return_value = {
                     "test/file1.md": FileInfo(
