@@ -100,9 +100,18 @@ test_roundtip.sh
 !examples/*.db
 !demo/*.db.example
 
-# Claude Code
-.claude/session-*/
-.claude/projects/*/cache/
-
-# Archives
+# Claude Code / dev internals — not for public consumption
+.claude/
+.serena/
+.planning/
 .archive/
+.env.example 2
+
+# Dev reports and scratch files
+SHELL_HANDLER_TEST_RESULTS.txt
+MVP_IMPLEMENTATION.yaml
+coverage.json
+prd.json
+
+# Claude Code project config
+.claude.json
