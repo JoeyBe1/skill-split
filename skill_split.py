@@ -680,7 +680,10 @@ def cmd_list_library(args) -> int:
             print(f"{'ID':<6} {'Name':<30} {'Type':<15} {'Path'}")
             print("-" * 105)
             for f in files:
-                print(f"{f['id']:<6} {f.get('name',''):<30} {f.get('type',''):<15} {f.get('path','')}")
+                name = f.get('name', '') or ''
+                if isinstance(name, list):
+                    name = name[0] if name else ''
+                print(f"{f['id']:<6} {str(name):<30} {f.get('type',''):<15} {f.get('path','')}")
             return 0
         except Exception as e:
             print(f"Error listing files: {e}", file=sys.stderr)

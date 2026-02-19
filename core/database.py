@@ -897,7 +897,10 @@ class DatabaseStore:
                         try:
                             fm = _yaml.safe_load(d["frontmatter"])
                             if isinstance(fm, dict):
-                                name = fm.get("name") or fm.get("title")
+                                raw = fm.get("name") or fm.get("title")
+                                if isinstance(raw, list):
+                                    raw = raw[0] if raw else None
+                                name = str(raw) if raw is not None else None
                         except Exception:
                             pass
 
