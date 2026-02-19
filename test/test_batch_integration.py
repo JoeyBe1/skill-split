@@ -1,6 +1,7 @@
 """Integration tests for batch embedding functionality."""
 
 import pytest
+pytest.importorskip("openai")
 import tempfile
 import os
 import sqlite3

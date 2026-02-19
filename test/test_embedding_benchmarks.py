@@ -1,6 +1,7 @@
 """Performance benchmarks for batch embedding."""
 
 import pytest
+pytest.importorskip("openai")
 import time
 from unittest.mock import MagicMock
 from core.embedding_service import EmbeddingService
