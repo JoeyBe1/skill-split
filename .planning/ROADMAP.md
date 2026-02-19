@@ -20,6 +20,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: API Key Security** - Remove API keys from environment variables ✓ (2026-02-10)
 - [x] **Phase 7: Documentation Gaps** - Close documentation gaps for backup/restore and phase status ✓ (2026-02-10)
 
+## Future Phases (Planned)
+
+- [ ] **Phase 8: Community Skill Discovery** - Ingest community skill repos (awesome-claude-code, awesome-claude-skills, GitHub topics) into the skill-split DB. Any LLM can search and checkout community skills the same way it searches local skills. This transforms skill-split from a personal library into a community skill discovery layer. **Joey's idea, 2026-02-18.**
+
+- [ ] **Phase 9: GitHub Actions Ingest** - Auto-ingest new skills from watched repos on push. Keep the community DB fresh without manual effort.
+
+- [ ] **Phase 10: skill-split as MCP Server** - Expose search/checkout/compose as MCP tools so any Claude session can query the skill library natively without CLI.
+
 ## Phase Details
 
 ### Phase 1: Hybrid Search Scoring
