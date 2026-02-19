@@ -2,14 +2,16 @@
 
 ![Tests](https://github.com/JoeyBe1/skill-split/actions/workflows/tests.yml/badge.svg)
 
-**Section-level SQLite library for Claude Code skills.** Stop loading 21KB files into context. Search, retrieve, and deploy the exact 200-byte section you need — **99% token savings**.
+**Section-level SQLite library for Claude Code skills.** Stop loading 22KB files into context. Search, retrieve, and deploy the exact section you need — **99% token savings**, proven on Anthropic's own published skills.
 
 ```
-Before: load entire skill file    → 21,847 bytes  (~5,400 tokens)
-After:  load one section by ID    →    204 bytes  (~50 tokens)
+Before: load entire skill file    → 22,827 bytes  (~5,700 tokens)
+After:  load one section by ID    →    317 bytes  (~80 tokens)
                                                    ────────────
-                                                   99% savings
+                                                   98.6% savings
 ```
+
+Tested live: 4 Anthropic-published skill files → **171 sections** stored, BM25 search returns results in **0.3ms**.
 
 ## Two Modes: Local SQLite vs Supabase Cloud
 
