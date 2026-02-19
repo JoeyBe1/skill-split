@@ -3,7 +3,11 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional, List, Set
-from core.supabase_store import SupabaseStore
+try:
+    from core.supabase_store import SupabaseStore
+except ImportError:
+    SupabaseStore = None
+from core.database import DatabaseStore
 from core.recomposer import Recomposer
 from models import FileType
 
@@ -14,8 +18,8 @@ logger = logging.getLogger(__name__)
 class CheckoutManager:
     """Manages file checkout/checkin operations with physical file copying."""
 
-    def __init__(self, store: SupabaseStore) -> None:
-        """Initialize with a SupabaseStore."""
+    def __init__(self, store) -> None:
+        """Initialize with a SupabaseStore or DatabaseStore."""
         self.store = store
         self.recomposer = Recomposer(store)
 
@@ -44,8 +48,11 @@ class CheckoutManager:
         deployed_files: Set[Path] = set()
 
         try:
-            # Step 1: Get file from Supabase (no side effects)
-            result = self.store.get_file(file_id)
+            # Step 1: Get file from store (no side effects)
+            if isinstance(self.store, DatabaseStore):
+                result = self.store.get_file_by_id(int(file_id))
+            else:
+                result = self.store.get_file(file_id)
             if not result:
                 raise ValueError(f"File not found: {file_id}")
 
@@ -65,6 +72,9 @@ class CheckoutManager:
             # Step 5: Deploy related files for multi-file components (filesystem)
             related_targets = self._deploy_related_files(metadata, target)
             deployed_files.update(related_targets)
+
+            # Step 5b: Update settings.json for plugins
+            self._update_settings_for_checkout(metadata, str(target))
 
             # Step 6: Record checkout in database (can fail)
             # If this fails, we need to rollback filesystem writes
@@ -246,6 +256,50 @@ class CheckoutManager:
                 related.append(storage_path)
         return related
 
+    def _update_settings_for_checkout(self, metadata, target_path: str) -> None:
+        """Update ~/.claude/settings.json to activate checked-out plugin."""
+        settings_path = Path.home() / ".claude" / "settings.json"
+        if not settings_path.exists():
+            return
+        try:
+            with open(settings_path) as f:
+                settings = json.load(f)
+        except Exception:
+            return
+        target = Path(target_path)
+        if metadata.type == FileType.PLUGIN:
+            plugin_name = target.parent.name
+            enabled = settings.setdefault("enabledPlugins", {})
+            enabled[plugin_name] = {"enabled": True, "path": str(target.parent)}
+            try:
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                logger.debug(f"Enabled plugin {plugin_name} in settings.json")
+            except Exception as e:
+                logger.warning(f"Could not update settings.json: {e}")
+
+    def _update_settings_for_checkin(self, target_path: str) -> None:
+        """Update ~/.claude/settings.json to deactivate checked-in plugin."""
+        settings_path = Path.home() / ".claude" / "settings.json"
+        if not settings_path.exists():
+            return
+        try:
+            with open(settings_path) as f:
+                settings = json.load(f)
+        except Exception:
+            return
+        target = Path(target_path)
+        plugin_name = target.parent.name
+        enabled = settings.get("enabledPlugins", {})
+        if plugin_name in enabled:
+            del enabled[plugin_name]
+            try:
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                logger.debug(f"Disabled plugin {plugin_name} in settings.json")
+            except Exception as e:
+                logger.warning(f"Could not update settings.json: {e}")
+
     def checkin(self, target_path: str) -> None:
         """
         Checkin a file (remove from target path, update database).
@@ -276,6 +330,9 @@ class CheckoutManager:
             # Filesystem failed, but we haven't touched database yet
             # Safe to raise without compensating action
             raise IOError(f"Failed to delete file {target_path}: {str(fs_error)}") from fs_error
+
+        # Step 2b: Update settings.json
+        self._update_settings_for_checkin(target_path)
 
         # Step 3: Update checkout status to 'returned' in database
         # If this fails, file is already deleted but database shows active

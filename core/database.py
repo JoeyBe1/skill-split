@@ -8,6 +8,7 @@ database operations for storing parsed files and their sections.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Dict, Any, Callable
 
@@ -113,6 +114,28 @@ class DatabaseStore:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_files_type ON files(type)"
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS checkouts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_id INTEGER NOT NULL,
+                    user TEXT NOT NULL DEFAULT 'unknown',
+                    target_path TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    notes TEXT DEFAULT '',
+                    checked_out_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    returned_at TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_checkouts_file ON checkouts(file_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_checkouts_target ON checkouts(target_path)"
             )
 
             # Create FTS5 virtual table for full-text search
@@ -821,6 +844,106 @@ class DatabaseStore:
 
             conn.commit()
             return True
+
+    def get_all_files(self) -> List[Dict]:
+        """List all files in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT id, path, type, frontmatter, hash, created_at, updated_at FROM files ORDER BY path"
+            )
+            result = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                d["name"] = Path(d["path"]).stem
+                d["storage_path"] = d["path"]
+                result.append(d)
+            return result
+
+    def get_file_by_path(self, path: str):
+        """Get a file by its path, returning (metadata, sections) tuple or None."""
+        return self.get_file(path)
+
+    def get_file_by_id(self, file_id: int):
+        """Get a file by its integer ID, returning (metadata, sections) tuple or None."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT id, path, type, frontmatter, hash FROM files WHERE id = ?",
+                (file_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            # Delegate to get_file using the path
+            return self.get_file(row["path"])
+
+    def checkout_file(self, file_id, user: str, target_path: str, notes: str = "") -> int:
+        """Record a file checkout. Returns checkout id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO checkouts (file_id, user, target_path, status, notes)
+                VALUES (?, ?, ?, 'active', ?)
+                """,
+                (file_id, user, target_path, notes)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def checkin_file(self, checkout_id: int) -> None:
+        """Mark a checkout as returned."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE checkouts SET status='returned', returned_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (checkout_id,)
+            )
+            conn.commit()
+
+    def get_checkout_info(self, target_path: str) -> Optional[Dict]:
+        """Get active checkout info for a target path."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT id, file_id, user, target_path, status, notes, checked_out_at
+                FROM checkouts WHERE target_path=? AND status='active'
+                ORDER BY checked_out_at DESC LIMIT 1
+                """,
+                (target_path,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_active_checkouts(self, user: Optional[str] = None) -> List[Dict]:
+        """Get all active checkouts, optionally filtered by user."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if user:
+                cursor = conn.execute(
+                    """
+                    SELECT c.id, c.file_id, c.user, c.target_path, c.status, c.checked_out_at,
+                           f.path as file_path, f.type as file_type
+                    FROM checkouts c JOIN files f ON c.file_id=f.id
+                    WHERE c.status='active' AND c.user=?
+                    ORDER BY c.checked_out_at DESC
+                    """,
+                    (user,)
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT c.id, c.file_id, c.user, c.target_path, c.status, c.checked_out_at,
+                           f.path as file_path, f.type as file_type
+                    FROM checkouts c JOIN files f ON c.file_id=f.id
+                    WHERE c.status='active'
+                    ORDER BY c.checked_out_at DESC
+                    """
+                )
+            return [dict(row) for row in cursor.fetchall()]
 
     def list_files_by_prefix(self, prefix: str) -> List[Dict]:
         """

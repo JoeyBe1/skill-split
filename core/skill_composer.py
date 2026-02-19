@@ -117,10 +117,11 @@ class SkillComposer:
 
         # Generate timestamp once for consistent hashing - use a deterministic timestamp based on inputs
         from datetime import datetime
-        # For deterministic testing, use a fixed timestamp based on the input section IDs
-        import hashlib
-        input_hash = hashlib.md5(str(sorted(section_ids)).encode()).hexdigest()
-        composition_timestamp = f"2023-01-01T00:00:00.{input_hash[:6]}Z"  # Fixed timestamp for same inputs
+        import hashlib as _hashlib
+        _input_hash = _hashlib.md5(str(sorted(section_ids)).encode()).hexdigest()
+        # Deterministic timestamp: same inputs → same timestamp (for hash stability)
+        ts_int = int(_input_hash[:8], 16) % (2**31)
+        composition_timestamp = datetime.fromtimestamp(ts_int).isoformat()
 
         # 4. Generate frontmatter (with enrichment if requested)
         # Detect original file_type from sections to preserve through composition

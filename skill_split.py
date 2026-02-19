@@ -34,7 +34,7 @@ from handlers.factory import HandlerFactory
 # Lazy imports for Supabase-dependent modules
 # (to allow running core commands without Supabase installed)
 SupabaseStore = None
-CheckoutManager = None
+from core.checkout_manager import CheckoutManager
 SecretManager = None
 
 
@@ -53,14 +53,12 @@ def get_default_db_path():
 
 def _ensure_supabase_imports():
     """Lazy load Supabase dependencies when needed."""
-    global SupabaseStore, CheckoutManager, SecretManager
+    global SupabaseStore, SecretManager
     if SupabaseStore is None:
         try:
             from core.supabase_store import SupabaseStore as SB
-            from core.checkout_manager import CheckoutManager as CM
             from core.secret_manager import SecretManager as SM
             SupabaseStore = SB
-            CheckoutManager = CM
             SecretManager = SM
         except ImportError as e:
             print(f"Error: Supabase modules not available. {e}", file=sys.stderr)
@@ -593,29 +591,41 @@ def cmd_ingest(args) -> int:
 
 def cmd_checkout(args) -> int:
     """Checkout file to target path."""
-    _ensure_supabase_imports()
     file_id = args.file_id
     target_path = args.target_path
     user = args.user
+    db_path = getattr(args, 'db', None)
 
-    # Get Supabase credentials from environment
+    if db_path:
+        store = DatabaseStore(db_path)
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            print(f"Error: Local file_id must be an integer, got: {file_id}", file=sys.stderr)
+            return 1
+        manager = CheckoutManager(store)
+        try:
+            deployed_path = manager.checkout_file(
+                file_id=file_id_int,
+                user=user,
+                target_path=target_path
+            )
+            print(f"File checked out to: {deployed_path}")
+            return 0
+        except Exception as e:
+            print(f"Error checking out file: {e}", file=sys.stderr)
+            return 1
+
+    _ensure_supabase_imports()
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = _get_supabase_key()
-
     if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY (or SUPABASE_PUBLISHABLE_KEY) environment variables are required", file=sys.stderr)
+        print("Error: SUPABASE_URL and SUPABASE_KEY required (or use --db for local mode)", file=sys.stderr)
         return 1
-
-    # Initialize store and manager
     store = SupabaseStore(supabase_url, supabase_key)
     manager = CheckoutManager(store)
-
     try:
-        deployed_path = manager.checkout_file(
-            file_id=file_id,
-            user=user,
-            target_path=target_path
-        )
+        deployed_path = manager.checkout_file(file_id=file_id, user=user, target_path=target_path)
         print(f"File checked out to: {deployed_path}")
         return 0
     except Exception as e:
@@ -625,21 +635,28 @@ def cmd_checkout(args) -> int:
 
 def cmd_checkin(args) -> int:
     """Checkin file from target path."""
-    _ensure_supabase_imports()
     target_path = args.target_path
+    db_path = getattr(args, 'db', None)
 
-    # Get Supabase credentials from environment
+    if db_path:
+        store = DatabaseStore(db_path)
+        manager = CheckoutManager(store)
+        try:
+            manager.checkin(target_path)
+            print(f"File checked in from: {target_path}")
+            return 0
+        except Exception as e:
+            print(f"Error checking in file: {e}", file=sys.stderr)
+            return 1
+
+    _ensure_supabase_imports()
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
-
     if not supabase_url or not supabase_key:
-        print("Error: SUPABASE_URL and SUPABASE_KEY environment variables are required", file=sys.stderr)
+        print("Error: SUPABASE_URL and SUPABASE_KEY required (or use --db for local mode)", file=sys.stderr)
         return 1
-
-    # Initialize store and manager
     store = SupabaseStore(supabase_url, supabase_key)
     manager = CheckoutManager(store)
-
     try:
         manager.checkin(target_path)
         print(f"File checked in from: {target_path}")
@@ -651,39 +668,46 @@ def cmd_checkin(args) -> int:
 
 def cmd_list_library(args) -> int:
     """List files in library."""
+    db_path = getattr(args, 'db', None)
+
+    if db_path:
+        store = DatabaseStore(db_path)
+        try:
+            files = store.get_all_files()
+            if not files:
+                print("No files in library")
+                return 0
+            print(f"{'ID':<6} {'Name':<30} {'Type':<15} {'Path'}")
+            print("-" * 105)
+            for f in files:
+                print(f"{f['id']:<6} {f.get('name',''):<30} {f.get('type',''):<15} {f.get('path','')}")
+            return 0
+        except Exception as e:
+            print(f"Error listing files: {e}", file=sys.stderr)
+            return 1
+
     _ensure_supabase_imports()
-    # Initialize store
-    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    use_sm = not getattr(args, 'no_use_secret_manager', False)
     secrets_cfg = getattr(args, 'secrets_config', None)
     store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
-
     try:
         files = store.get_all_files()
-
         if not files:
             print("No files in library")
             return 0
-
-        # Print header
         print(f"{'Name':<30} {'Type':<15} {'Storage Path':<50} {'Checkout Status':<20}")
         print("-" * 115)
-
-        # Print each file
         for file_data in files:
             name = file_data.get("name", "")
             file_type = file_data.get("type", "unknown")
             storage_path = file_data.get("storage_path", "")
-
-            # Check if file has active checkout
             active_checkouts = store.get_active_checkouts()
             checkout_status = "checked out" if any(
                 c.get("file_id") == file_data.get("id") for c in active_checkouts
             ) else "available"
-
             print(f"{name:<30} {file_type:<15} {storage_path:<50} {checkout_status:<20}")
-
         return 0
     except Exception as e:
         print(f"Error listing files: {e}", file=sys.stderr)
@@ -692,39 +716,42 @@ def cmd_list_library(args) -> int:
 
 def cmd_status(args) -> int:
     """Show active checkouts."""
-    _ensure_supabase_imports()
+    db_path = getattr(args, 'db', None)
     user = getattr(args, 'user', None)
 
-    # Initialize store
-    use_sm = not getattr(args, 'no_use_secret_manager', False)  # Inverted flag
+    if db_path:
+        store = DatabaseStore(db_path)
+        try:
+            checkouts = store.get_active_checkouts(user=user)
+            if not checkouts:
+                print("No active checkouts" + (f" for user: {user}" if user else ""))
+                return 0
+            print(f"{'ID':<6} {'File':<40} {'Target':<50} {'User':<15} {'Checked Out'}")
+            print("-" * 135)
+            for c in checkouts:
+                print(f"{c['id']:<6} {c.get('file_path',''):<40} {c['target_path']:<50} {c['user']:<15} {c.get('checked_out_at','')}")
+            return 0
+        except Exception as e:
+            print(f"Error getting checkout status: {e}", file=sys.stderr)
+            return 1
+
+    _ensure_supabase_imports()
+    use_sm = not getattr(args, 'no_use_secret_manager', False)
     secrets_cfg = getattr(args, 'secrets_config', None)
     store = _get_supabase_store(use_secret_manager=use_sm, secrets_config=secrets_cfg)
     if store is None:
         return 1
-
     try:
         checkouts = store.get_active_checkouts(user=user)
-
         if not checkouts:
-            if user:
-                print(f"No active checkouts for user: {user}")
-            else:
-                print("No active checkouts")
+            print("No active checkouts" + (f" for user: {user}" if user else ""))
             return 0
-
-        # Print header
-        print(f"{'User':<20} {'File ID':<40} {'Target Path':<50} {'Status':<15}")
-        print("-" * 125)
-
-        # Print each checkout
-        for checkout in checkouts:
-            user_name = checkout.get("user_name", "")
-            file_id = checkout.get("file_id", "")
-            target_path = checkout.get("target_path", "")
-            status = checkout.get("status", "active")
-
-            print(f"{user_name:<20} {file_id:<40} {target_path:<50} {status:<15}")
-
+        print(f"{'File':<40} {'Target Path':<50} {'User':<15} {'Checked Out'}")
+        print("-" * 130)
+        for c in checkouts:
+            file_path = c.get("storage_path", c.get("file_id", ""))
+            user_val = c.get('user_name') or c.get('user', '')
+            print(f"{file_path:<40} {c.get('target_path',''):<50} {user_val:<15} {c.get('checked_out_at','')}")
         return 0
     except Exception as e:
         print(f"Error getting checkout status: {e}", file=sys.stderr)
@@ -1268,6 +1295,7 @@ def main() -> int:
     checkout_parser.add_argument("file_id", help="UUID of file to checkout")
     checkout_parser.add_argument("target_path", help="Target path to deploy file to")
     checkout_parser.add_argument("--user", default="unknown", help="Username checking out the file")
+    checkout_parser.add_argument("--db", default=None, help="Local SQLite database (skips Supabase)")
     checkout_parser.set_defaults(func=cmd_checkout)
 
     # Checkin command
@@ -1275,6 +1303,7 @@ def main() -> int:
         "checkin", help="Checkin file from target path"
     )
     checkin_parser.add_argument("target_path", help="Path where file is currently deployed")
+    checkin_parser.add_argument("--db", default=None, help="Local SQLite database (skips Supabase)")
     checkin_parser.set_defaults(func=cmd_checkin)
 
     # List-library command
@@ -1283,6 +1312,7 @@ def main() -> int:
     )
     list_library_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
     list_library_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
+    list_library_parser.add_argument("--db", default=None, help="Local SQLite database (skips Supabase)")
     list_library_parser.set_defaults(func=cmd_list_library)
 
     # Status command
@@ -1292,6 +1322,7 @@ def main() -> int:
     status_parser.add_argument("--user", help="Filter by username (optional)")
     status_parser.add_argument("--no-use-secret-manager", action="store_true", help="Disable SecretManager for this command")
     status_parser.add_argument("--secrets-config", default=None, help="Path to secrets config file")
+    status_parser.add_argument("--db", default=None, help="Local SQLite database (skips Supabase)")
     status_parser.set_defaults(func=cmd_status)
 
     # Search-library command
