@@ -2,7 +2,14 @@
 
 ![Tests](https://github.com/JoeyBe1/skill-split/actions/workflows/tests.yml/badge.svg)
 
-Parse, store, search, compose, and deploy any Claude Code component (skills, commands, plugins, hooks, configs, scripts) with full section-level granularity and 99% token savings.
+**Section-level SQLite library for Claude Code skills.** Stop loading 21KB files into context. Search, retrieve, and deploy the exact 200-byte section you need — **99% token savings**.
+
+```
+Before: load entire skill file    → 21,847 bytes  (~5,400 tokens)
+After:  load one section by ID    →    204 bytes  (~50 tokens)
+                                                   ────────────
+                                                   99% savings
+```
 
 ## Two Modes: Local SQLite vs Supabase Cloud
 
@@ -94,7 +101,7 @@ Imagine a 50KB skill definition file with 20 sections. Instead of sending all 50
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/skill-split.git
+git clone https://github.com/JoeyBe1/skill-split.git
 cd skill-split
 pip install -e .
 ```

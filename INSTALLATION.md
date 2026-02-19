@@ -33,7 +33,7 @@ This method gives you the latest code and allows for easy development.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/skill-split.git
+git clone https://github.com/JoeyBe1/skill-split.git
 cd skill-split
 
 # Install in editable mode
@@ -90,7 +90,7 @@ docker run -v $(pwd):/data skill-split parse /data/SKILL.md
 pip install pipenv
 
 # Clone repository
-git clone https://github.com/yourusername/skill-split.git
+git clone https://github.com/JoeyBe1/skill-split.git
 cd skill-split
 
 # Install with pipenv
