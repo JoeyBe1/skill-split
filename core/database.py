@@ -846,7 +846,26 @@ class DatabaseStore:
             return True
 
     def get_all_files(self) -> List[Dict]:
-        """List all files in the database."""
+        """List all files in the database.
+
+        Naming rules (matches real-world Claude Code conventions):
+        - skill:   folder name (skills live in named dirs as SKILL.md)
+        - plugin:  folder name (plugin.json lives inside named plugin dir)
+        - hook:    folder name (hooks.json lives inside named hook dir)
+        - command: .md stem (commands ARE their filename, e.g. commit.md)
+        - config:  .json/.yaml stem (settings.json, mcp_config.json)
+        - script:  .py/.sh/.ts/.js stem (scripts are their filename)
+        - other:   frontmatter name/title → parent dir if generic → stem
+        """
+        import yaml as _yaml
+
+        # These filenames are meaningless without their parent dir
+        _GENERIC_STEMS = {"skill", "plugin", "hook", "config", "readme", "claude", "index", "main"}
+        # Types that always use folder name
+        _FOLDER_NAME_TYPES = {"skill", "plugin", "hook"}
+        # Types that always use file stem
+        _STEM_NAME_TYPES = {"command", "config", "script", "python", "javascript", "typescript", "shell"}
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -855,7 +874,41 @@ class DatabaseStore:
             result = []
             for row in cursor.fetchall():
                 d = dict(row)
-                d["name"] = Path(d["path"]).stem
+                p = Path(d["path"])
+                stem = p.stem.lower()
+                ftype = (d.get("type") or "").lower()
+
+                name = None
+
+                # Type-specific rules take priority
+                if ftype in _FOLDER_NAME_TYPES:
+                    import re as _re
+                    # Walk up past hidden dirs (.claude-plugin) and semver dirs (1.2.3)
+                    _SEMVER = _re.compile(r'^\d+\.\d+')
+                    parent = p.parent
+                    while parent.name.startswith('.') or _SEMVER.match(parent.name):
+                        parent = parent.parent
+                    name = parent.name or p.stem
+                elif ftype in _STEM_NAME_TYPES:
+                    name = p.stem
+                else:
+                    # 1. Try frontmatter name/title
+                    if d.get("frontmatter"):
+                        try:
+                            fm = _yaml.safe_load(d["frontmatter"])
+                            if isinstance(fm, dict):
+                                name = fm.get("name") or fm.get("title")
+                        except Exception:
+                            pass
+
+                    # 2. Parent dir if filename is generic
+                    if not name:
+                        if stem in _GENERIC_STEMS and p.parent.name:
+                            name = p.parent.name
+                        else:
+                            name = p.stem
+
+                d["name"] = name
                 d["storage_path"] = d["path"]
                 result.append(d)
             return result
