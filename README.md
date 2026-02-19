@@ -1,5 +1,7 @@
 # skill-split
 
+![Tests](https://github.com/JoeyBe1/skill-split/actions/workflows/tests.yml/badge.svg)
+
 Parse, store, search, compose, and deploy any Claude Code component (skills, commands, plugins, hooks, configs, scripts) with full section-level granularity and 99% token savings.
 
 ## Two Modes: Local SQLite vs Supabase Cloud
