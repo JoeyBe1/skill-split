@@ -595,6 +595,7 @@ def cmd_checkout(args) -> int:
     target_path = args.target_path
     user = args.user
     db_path = getattr(args, 'db', None)
+    preserve_headings = not getattr(args, 'strip_headings', False)
 
     if db_path:
         store = DatabaseStore(db_path)
@@ -608,7 +609,8 @@ def cmd_checkout(args) -> int:
             deployed_path = manager.checkout_file(
                 file_id=file_id_int,
                 user=user,
-                target_path=target_path
+                target_path=target_path,
+                preserve_headings=preserve_headings,
             )
             print(f"File checked out to: {deployed_path}")
             return 0
@@ -625,7 +627,12 @@ def cmd_checkout(args) -> int:
     store = SupabaseStore(supabase_url, supabase_key)
     manager = CheckoutManager(store)
     try:
-        deployed_path = manager.checkout_file(file_id=file_id, user=user, target_path=target_path)
+        deployed_path = manager.checkout_file(
+            file_id=file_id,
+            user=user,
+            target_path=target_path,
+            preserve_headings=preserve_headings,
+        )
         print(f"File checked out to: {deployed_path}")
         return 0
     except Exception as e:
@@ -1298,6 +1305,11 @@ def main() -> int:
     checkout_parser.add_argument("file_id", help="UUID of file to checkout")
     checkout_parser.add_argument("target_path", help="Target path to deploy file to")
     checkout_parser.add_argument("--user", default="unknown", help="Username checking out the file")
+    checkout_parser.add_argument(
+        "--strip-headings",
+        action="store_true",
+        help="Deploy content-only markdown (drops heading lines); default preserves headings",
+    )
     checkout_parser.add_argument("--db", default=None, help="Local SQLite database (skips Supabase)")
     checkout_parser.set_defaults(func=cmd_checkout)
 

@@ -75,6 +75,56 @@ class TestCheckoutFile:
         # Verify checkout was recorded
         mock_store.checkout_file.assert_called_once()
 
+    def test_checkout_preserves_or_strips_headings_by_flag(self, mock_store, tmp_path):
+        """Default preserves markdown headings; opt-out strips them."""
+        test_file_id = str(uuid4())
+        target_dir = tmp_path / "target"
+
+        # Simulate parser output: headings are NOT in section.content
+        child = Section(
+            level=2,
+            title="Child",
+            content="Child body.\n",
+            line_start=4,
+            line_end=5,
+        )
+        parent = Section(
+            level=1,
+            title="Parent",
+            content="Intro line.\n\n",
+            line_start=1,
+            line_end=5,
+            children=[child],
+        )
+        metadata = FileMetadata(
+            path="/tmp/source.md",
+            type=FileType.SKILL,
+            frontmatter=None,
+            hash="abc123",
+        )
+        mock_store.get_file.return_value = (metadata, [parent])
+        mock_store.checkout_file.return_value = str(uuid4())
+
+        manager = CheckoutManager(mock_store)
+
+        default_out = target_dir / "default.md"
+        strip_out = target_dir / "strip.md"
+
+        manager.checkout_file(
+            file_id=test_file_id,
+            user="joey",
+            target_path=str(default_out),
+        )
+        manager.checkout_file(
+            file_id=test_file_id,
+            user="joey",
+            target_path=str(strip_out),
+            preserve_headings=False,
+        )
+
+        assert default_out.read_text() == "# Parent\nIntro line.\n\n## Child\nChild body.\n"
+        assert strip_out.read_text() == "Intro line.\n\nChild body.\n"
+
 
 class TestCheckin:
     """Test checking in files (removing from target)."""

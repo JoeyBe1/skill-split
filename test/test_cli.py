@@ -162,6 +162,36 @@ class TestCheckoutCommand:
         # This will fail until we implement - that's expected in TDD
         # We're just verifying test structure is correct
 
+    def test_checkout_command_strip_headings_flag_wiring(self, tmp_path, monkeypatch):
+        """CLI forwards --strip-headings as preserve_headings=False."""
+        target_path = str(tmp_path / "out.md")
+        mock_store = MagicMock()
+        mock_manager = MagicMock()
+        mock_manager.checkout_file.return_value = target_path
+
+        monkeypatch.setattr("skill_split.DatabaseStore", lambda *args, **kwargs: mock_store)
+        monkeypatch.setattr("skill_split.CheckoutManager", lambda *args, **kwargs: mock_manager)
+
+        from skill_split import cmd_checkout
+
+        args = argparse.Namespace(
+            file_id="1",
+            target_path=target_path,
+            user="joey",
+            db=str(tmp_path / "test.db"),
+            strip_headings=True,
+        )
+
+        result = cmd_checkout(args)
+
+        assert result == 0
+        mock_manager.checkout_file.assert_called_once_with(
+            file_id=1,
+            user="joey",
+            target_path=target_path,
+            preserve_headings=False,
+        )
+
 
 class TestCheckinCommand:
     """Test the checkin command."""

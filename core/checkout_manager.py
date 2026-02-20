@@ -24,7 +24,11 @@ class CheckoutManager:
         self.recomposer = Recomposer(store)
 
     def checkout_file(
-        self, file_id: str, user: str, target_path: Optional[str] = None
+        self,
+        file_id: str,
+        user: str,
+        target_path: Optional[str] = None,
+        preserve_headings: bool = True,
     ) -> str:
         """
         Checkout a file (copy from storage to target path) with transaction safety.
@@ -59,7 +63,11 @@ class CheckoutManager:
             metadata, sections = result
 
             # Step 2: Recompose file content (in-memory)
-            content = self._recompose_from_sections(metadata, sections)
+            content = self._recompose_from_sections(
+                metadata,
+                sections,
+                preserve_headings=preserve_headings,
+            )
 
             # Step 3: Create target directory if needed
             target = Path(target_path)
@@ -106,7 +114,7 @@ class CheckoutManager:
                 self._rollback_deployment(deployed_files)
             raise IOError(f"Checkout failed: {str(e)}")
 
-    def _recompose_from_sections(self, metadata, sections) -> str:
+    def _recompose_from_sections(self, metadata, sections, preserve_headings: bool = True) -> str:
         """
         Recompose file content from metadata and sections.
 
@@ -127,7 +135,26 @@ class CheckoutManager:
         if metadata.type == FileType.SCRIPT:
             return self._recompose_script(sections)
 
-        # Add frontmatter if present (markdown/yaml files)
+        # Markdown/yaml files: support explicit mode
+        if preserve_headings:
+            # Preserve headings and hierarchy for exact reconstruction.
+            frontmatter_part = ""
+            if metadata.frontmatter:
+                frontmatter_part = self.recomposer._build_frontmatter(
+                    metadata.frontmatter,
+                    bool(sections),
+                )
+
+            body_part = self.recomposer._build_sections_content(sections)
+
+            # Preserve orphaned content behavior from Recomposer.recompose()
+            has_orphaned_content = sections and sections[0].level == 0
+            if has_orphaned_content and frontmatter_part:
+                frontmatter_part = frontmatter_part[:-1]
+
+            return f"{frontmatter_part}{body_part}" if frontmatter_part else body_part
+
+        # Strip headings mode: keep legacy behavior for transformation workflows.
         if metadata.frontmatter:
             content += "---\n"
             content += metadata.frontmatter
@@ -135,7 +162,6 @@ class CheckoutManager:
                 content += "\n"
             content += "---\n\n"
 
-        # Add sections
         for section in sections:
             content += section.get_all_content()
 
