@@ -102,13 +102,33 @@ class SkillComposer:
         if not output_path:
             raise ValueError("output_path cannot be empty")
 
+        # Prevent ambiguous composition semantics and misleading downstream errors.
+        seen = set()
+        duplicate_ids = []
+        for section_id in section_ids:
+            if section_id in seen and section_id not in duplicate_ids:
+                duplicate_ids.append(section_id)
+            seen.add(section_id)
+
+        if duplicate_ids:
+            duplicates_str = ",".join(str(sid) for sid in duplicate_ids)
+            raise ValueError(
+                "Duplicate section IDs in compose request: "
+                f"[{duplicates_str}]. Each section ID must be unique. "
+                "Next step: remove duplicates from --sections."
+            )
+
         # 1. Retrieve sections from database
         sections = self._retrieve_sections(section_ids)
 
         # 2. Validate retrieval succeeded
         if len(sections) != len(section_ids):
-            missing = set(section_ids) - set(sections.keys())
-            raise ValueError(f"Missing sections: {missing}")
+            missing = sorted(set(section_ids) - set(sections.keys()))
+            raise ValueError(
+                "Section retrieval mismatch while composing. "
+                f"requested={len(section_ids)} retrieved={len(sections)} missing={missing}. "
+                "Next step: verify section IDs with `skill_split.py list <file> --db <path>`."
+            )
 
         # 3. Rebuild hierarchy
         # Pass sections in the order of section_ids to respect user intent
@@ -391,8 +411,8 @@ class SkillComposer:
         # Use original type for category, default to "composed"
         category = original_type.value if original_type else "composed"
 
-        # Count total sections (including children)
-        section_count = sum(1 + len(s.children) for s in sections)
+        # Count all sections recursively to match enriched frontmatter semantics.
+        section_count = self._count_total_sections(sections)
 
         # Build YAML
         lines = [

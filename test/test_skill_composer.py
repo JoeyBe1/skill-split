@@ -340,6 +340,23 @@ class TestFrontmatterGeneration:
 
         assert "sections: 3" in frontmatter
 
+    def test_generate_basic_frontmatter_counts_recursively(self, skill_composer):
+        """Test that basic frontmatter counts nested sections recursively."""
+        root = Section(1, "Root", "Root content\n", 1, 2)
+        child = Section(2, "Child", "Child content\n", 3, 4)
+        grandchild = Section(3, "Grandchild", "Grandchild content\n", 5, 6)
+        child.add_child(grandchild)
+        root.add_child(child)
+
+        frontmatter = skill_composer._generate_basic_frontmatter(
+            title="Test",
+            description="Test",
+            sections=[root],
+            section_ids=[1, 2, 3],
+        )
+
+        assert "sections: 3" in frontmatter
+
     def test_slugify_spaces_to_hyphens(self, skill_composer):
         """Test that spaces are converted to hyphens."""
         slug = skill_composer._slugify("My Test Skill")
@@ -388,6 +405,14 @@ class TestComposeFromSections:
         with pytest.raises(ValueError, match="Section 999 not found"):
             skill_composer.compose_from_sections(
                 section_ids=[1, 999],
+                output_path="/tmp/test.md"
+            )
+
+    def test_compose_rejects_duplicate_section_ids(self, skill_composer):
+        """Test error with duplicate section IDs."""
+        with pytest.raises(ValueError, match="Duplicate section IDs in compose request"):
+            skill_composer.compose_from_sections(
+                section_ids=[1, 1, 2],
                 output_path="/tmp/test.md"
             )
 

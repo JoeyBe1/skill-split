@@ -969,11 +969,19 @@ def cmd_compose(args) -> int:
     try:
         section_ids = [int(sid.strip()) for sid in section_ids_str.split(',')]
     except ValueError:
-        print("Error: Section IDs must be comma-separated integers", file=sys.stderr)
+        print(
+            "Error [compose.invalid_section_ids] at skill_split.py:cmd_compose: "
+            "--sections must be comma-separated integers (example: --sections 1,2,3).",
+            file=sys.stderr,
+        )
         return 1
 
     if not section_ids:
-        print("Error: At least one section ID is required", file=sys.stderr)
+        print(
+            "Error [compose.empty_section_ids] at skill_split.py:cmd_compose: "
+            "at least one section ID is required. Next step: pass --sections with one or more IDs.",
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -1013,10 +1021,27 @@ def cmd_compose(args) -> int:
         return 0
 
     except ValueError as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        print(
+            "Error [compose.validation] at core/skill_composer.py:compose_from_sections: "
+            f"{str(e)}",
+            file=sys.stderr,
+        )
+        print(
+            "Next step: verify IDs with `skill_split.py list <file> --db <path>`, "
+            "then rerun compose with unique IDs.",
+            file=sys.stderr,
+        )
         return 1
     except Exception as e:
-        print(f"Error composing skill: {str(e)}", file=sys.stderr)
+        print(
+            "Error [compose.internal] at skill_split.py:cmd_compose: "
+            f"unexpected runtime failure: {str(e)}",
+            file=sys.stderr,
+        )
+        print(
+            "Next step: rerun the same command. If it still fails, capture this output and inspect DB/path inputs.",
+            file=sys.stderr,
+        )
         return 1
 
 
