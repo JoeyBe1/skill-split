@@ -384,6 +384,11 @@ class HybridSearch:
             "vector_searches": 0,
             "text_searches": 0,
             "last_search_at": None,
+            "total_embedding_time_ms": 0.0,
+            "embedding_cache_hits": 0,
+            "embedding_cache_misses": 0,
+            "average_results_per_search": 0.0,
+            "failed_searches": 0,
         }
 
 
