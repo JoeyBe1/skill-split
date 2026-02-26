@@ -320,7 +320,7 @@ class TestHybridSearch:
         assert "last_search_at" in metrics
 
     def test_reset_metrics(self):
-        """reset_metrics clears all tracking."""
+        """reset_metrics clears all tracking and get_metrics() must not KeyError."""
         # Populate metrics
         self.hybrid_search.metrics["total_searches"] = 5
         self.hybrid_search.metrics["total_latency_ms"] = 100.0
@@ -330,6 +330,15 @@ class TestHybridSearch:
         assert self.hybrid_search.metrics["total_searches"] == 0
         assert self.hybrid_search.metrics["total_latency_ms"] == 0
         assert self.hybrid_search.metrics["last_search_at"] is None
+
+        # All keys required by get_metrics() must be present after reset
+        result = self.hybrid_search.get_metrics()
+        assert result["total_searches"] == 0
+        assert result["failed_searches"] == 0
+        assert result["embedding_cache_hits"] == 0
+        assert result["embedding_cache_misses"] == 0
+        assert result["average_results_per_search"] == 0.0
+        assert result["average_embedding_time_ms"] == 0.0
 
 
 class TestSearchRanker:
