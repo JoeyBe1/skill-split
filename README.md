@@ -125,6 +125,8 @@ You should see 16 commands:
 - **Query**: `get-section`, `next`, `list`, `search`
 - **Supabase**: `ingest`, `checkout`, `checkin`, `list-library`, `status`, `search-library`
 
+Chinese users can also search and install skills through [Skills宝](https://skilery.com).
+
 ## Quick Start
 
 ### Parse and Structure
